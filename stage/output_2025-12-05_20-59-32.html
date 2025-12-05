@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>跳绳与篮球的价格</title>
+    <style>
+        :root {
+            --bg-color-start: #f0f4f8;
+            --bg-color-end: #d9e2ec;
+            --text-color: #334;
+            --subtitle-bg: rgba(0, 0, 0, 0.5);
+            --subtitle-text: #fff;
+            --card-bg: #ffffff;
+            --card-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            --progress-bar-color: #6a82fb;
+            --progress-bg-color: rgba(255, 255, 255, 0.5);
+            --coin-color: #ffd700;
+            --rope-color: #ff7e7e;
+            --ball-color: #7aa5e9;
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, "Microsoft Yahei", "Noto Sans SC", sans-serif;
+            background: linear-gradient(135deg, var(--bg-color-start), var(--bg-color-end));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #cinema-container {
+            width: 100%;
+            max-width: 900px;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .overlay-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2.5%;
+            box-sizing: border-box;
+        }
+        
+        .header {
+            text-align: center;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+
+        .header.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .title {
+            color: var(--text-color);
+            font-size: 2.2vw;
+            margin: 0;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+        }
+        
+        .subtitle-topic {
+            color: var(--text-color);
+            opacity: 0.7;
+            font-size: 1.5vw;
+        }
+
+        .math-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            padding: 1.5vw 2.5vw;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .math-card.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .math-text {
+            font-size: 2.5vw;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+        .math-sub {
+            font-size: 1.2vw;
+            color: var(--text-color);
+            opacity: 0.6;
+            margin-top: 0.5vw;
+        }
+
+        .subtitle-box {
+            align-self: center;
+            background: var(--subtitle-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: var(--subtitle-text);
+            padding: 1.2vh 2.5vw;
+            border-radius: 50px;
+            text-align: center;
+            margin-bottom: 2%;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .subtitle-box.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .subtitle-cn {
+            display: block;
+            font-size: 1.6vw;
+            line-height: 1.4;
+        }
+        .subtitle-en {
+            display: block;
+            font-size: 1vw;
+            opacity: 0.7;
+            line-height: 1.4;
+        }
+
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: var(--progress-bg-color);
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--progress-bar-color);
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+
+<div id="cinema-container">
+    <canvas id="canvas"></canvas>
+
+    <div class="overlay-layer">
+        <div class="header" id="header">
+            <h1 class="title">跳绳与篮球的价格</h1>
+            <span class="subtitle-topic">等量代换问题</span>
+        </div>
+
+        <div class="math-card" id="mathCard">
+            <div class="math-text" id="mathContent"></div>
+            <div class="math-sub" id="mathLabel"></div>
+        </div>
+
+        <div class="subtitle-box" id="subtitleBox">
+            <span class="subtitle-cn" id="subCN"></span>
+            <span class="subtitle-en" id="subEN"></span>
+        </div>
+    </div>
+
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const header = document.getElementById('header');
+    const mathCard = document.getElementById('mathCard');
+    const mathContent = document.getElementById('mathContent');
+    const mathLabel = document.getElementById('mathLabel');
+    const subtitleBox = document.getElementById('subtitleBox');
+    const subCN = document.getElementById('subCN');
+    const subEN = document.getElementById('subEN');
+    const progressBar = document.getElementById('progressBar');
+
+    let canvasWidth, canvasHeight;
+    let entities = [];
+    let startTime = null;
+    let currentStep = -1;
+
+    const script = [
+        { t: 500,  cn: "菲菲买了2根跳绳和1个篮球，付了50元，找回1元。", en: "Fifi bought 2 jump ropes and 1 basketball, paid 50 yuan and got 1 yuan back.", action: 'intro' },
+        { t: 4000, cn: "首先，我们来计算实际花了多少钱。", en: "First, let's calculate the actual cost.", action: 'show_cost_calc' },
+        { t: 7000, cn: "50元减去找回的1元，总共花费了49元。", en: "50 yuan minus 1 yuan change equals 49 yuan total.", action: 'execute_cost_calc' },
+        { t: 10000, cn: "这49元，买了2根跳绳和1个篮球。", en: "This 49 yuan was spent on 2 jump ropes and 1 basketball.", action: 'show_initial_items' },
+        { t: 13000, cn: "题目告诉我们，1个篮球的价格等于5根跳绳的价格。", en: "The problem states that 1 basketball costs the same as 5 jump ropes.", action: 'show_equivalence' },
+        { t: 16000, cn: "现在，我们用5根跳绳来替换掉这个篮球。", en: "Now, let's replace the basketball with 5 jump ropes.", action: 'perform_substitution' },
+        { t: 20000, cn: "这样，总花费49元就相当于买了7根跳绳。", en: "So, 49 yuan is equivalent to buying 7 jump ropes in total.", action: 'show_total_ropes' },
+        { t: 23000, cn: "用总价除以数量，就能算出每根跳绳的价格。", en: "Divide the total price by the quantity to find the price of one jump rope.", action: 'show_rope_price_calc' },
+        { t: 26000, cn: "49元除以7根，等于每根7元。", en: "49 yuan divided by 7 ropes equals 7 yuan per rope.", action: 'execute_rope_price_calc' },
+        { t: 29000, cn: "知道跳绳的价格后，我们就能算出篮球的价格了。", en: "Knowing the rope's price, we can now find the basketball's price.", action: 'prepare_ball_price_calc' },
+        { t: 32000, cn: "用1根跳绳的价格乘以5，就是篮球的价格。", en: "Multiply the price of one rope by 5 to get the price of the basketball.", action: 'show_ball_price_calc' },
+        { t: 35000, cn: "7元乘以5，等于35元。", en: "7 yuan times 5 equals 35 yuan.", action: 'execute_ball_price_calc' },
+        { t: 38000, cn: "所以，1根跳绳7元，1个篮球35元。", en: "So, a jump rope is 7 yuan, and a basketball is 35 yuan.", action: 'final_summary' },
+    ];
+
+    const totalDuration = script[script.length - 1].t + 2000;
+
+    function lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+
+    class Entity {
+        constructor({ x, y, scale = 1, opacity = 1, color = '#000' }) {
+            this.x = x; this.y = y; this.scale = scale; this.opacity = opacity;
+            this.targetX = x; this.targetY = y; this.targetScale = scale; this.targetOpacity = opacity;
+            this.color = color;
+            this.visible = true;
+        }
+
+        update(dt = 0.016) {
+            const t = 1 - Math.pow(0.05, dt * 60); // Frame-rate independent interpolation
+            this.x = lerp(this.x, this.targetX, t);
+            this.y = lerp(this.y, this.targetY, t);
+            this.scale = lerp(this.scale, this.targetScale, t);
+            this.opacity = lerp(this.opacity, this.targetOpacity, t);
+        }
+
+        draw(ctx) {
+            if (!this.visible || this.opacity < 0.01) return;
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+            ctx.globalAlpha = this.opacity;
+            this.render(ctx);
+            ctx.restore();
+        }
+        
+        render(ctx) { /* To be implemented by subclasses */ }
+
+        moveTo(x, y, s = this.targetScale, o = this.targetOpacity) {
+            this.targetX = x; this.targetY = y; this.targetScale = s; this.targetOpacity = o;
+        }
+
+        appear(x, y, scale = 1) {
+            this.x = x; this.y = y; this.scale = 0; this.opacity = 0;
+            this.moveTo(x, y, scale, 1);
+            this.visible = true;
+        }
+
+        disappear() {
+            this.targetScale = 0;
+            this.targetOpacity = 0;
+        }
+    }
+
+    class Coin extends Entity {
+        render(ctx) {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('元', 0, 1);
+        }
+    }
+
+    class JumpRope extends Entity {
+        render(ctx) {
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            // Handles
+            ctx.fillStyle = '#c56b6b';
+            ctx.fillRect(-20, -5, 6, 10);
+            ctx.fillRect(14, -5, 6, 10);
+            // Rope
+            ctx.beginPath();
+            ctx.moveTo(-15, 0);
+            ctx.bezierCurveTo(-10, 20, 10, 20, 15, 0);
+            ctx.stroke();
+        }
+    }
+
+    class Basketball extends Entity {
+        render(ctx) {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, 18, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, -18); ctx.lineTo(0, 18);
+            ctx.moveTo(-18, 0); ctx.lineTo(18, 0);
+            ctx.moveTo(-12.7, -12.7); ctx.bezierCurveTo(-5, 0, 5, 0, 12.7, -12.7);
+            ctx.moveTo(-12.7, 12.7); ctx.bezierCurveTo(-5, 0, 5, 0, 12.7, 12.7);
+            ctx.stroke();
+        }
+    }
+
+    function setup() {
+        const container = document.getElementById('cinema-container');
+        const rect = container.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+        
+        canvasWidth = rect.width;
+        canvasHeight = rect.height;
+
+        ctx.scale(dpr, dpr);
+    }
+    
+    function showMathCard(content, sub = '') {
+        mathContent.textContent = content;
+        mathLabel.textContent = sub;
+        mathCard.classList.add('visible');
+    }
+    
+    function hideMathCard() {
+        mathCard.classList.remove('visible');
+    }
+
+    function executeAction(action) {
+        hideMathCard();
+        const centerX = canvasWidth / 2;
+        const centerY = canvasHeight / 2;
+
+        switch (action) {
+            case 'intro':
+                header.classList.add('visible');
+                const fiftyYuan = new Coin({ x: -30, y: centerY, color: 'var(--coin-color)' });
+                const oneYuan = new Coin({ x: -30, y: centerY, color: '#silver' });
+                fiftyYuan.appear(centerX - 80, centerY);
+                oneYuan.appear(centerX + 80, centerY);
+                entities.push(fiftyYuan, oneYuan);
+                break;
+
+            case 'show_cost_calc':
+                showMathCard("50 - 1 = ?");
+                break;
+
+            case 'execute_cost_calc':
+                entities[0].moveTo(centerX - 100, centerY); // 50元
+                entities[1].moveTo(centerX + 100, centerY - 80, 1, 0); // 1元
+                setTimeout(() => { 
+                    entities[1].visible = false;
+                    const coinPositions = Array.from({length: 49}, (_, i) => [
+                        centerX - 100 + (i % 7) * 30,
+                        centerY - 60 + Math.floor(i / 7) * 30
+                    ]);
+                    entities[0].disappear();
+                    entities = [];
+                    coinPositions.forEach(pos => {
+                        const c = new Coin({ x: centerX, y: centerY, color: 'var(--coin-color)' });
+                        c.appear(...pos, 0.8);
+                        entities.push(c);
+                    });
+                }, 800);
+                showMathCard("50 - 1 = 49", "总花费49元");
+                break;
+            
+            case 'show_initial_items':
+                entities.forEach(e => e.moveTo(e.targetX, e.targetY - 120));
+                const rope1 = new JumpRope({ color: 'var(--rope-color)' });
+                const rope2 = new JumpRope({ color: 'var(--rope-color)' });
+                const ball = new Basketball({ color: 'var(--ball-color)' });
+                rope1.appear(centerX - 60, centerY + 100);
+                rope2.appear(centerX, centerY + 100);
+                ball.appear(centerX + 70, centerY + 100, 1.2);
+                entities.push(rope1, rope2, ball);
+                break;
+
+            case 'show_equivalence':
+                const ballEntity = entities.find(e => e instanceof Basketball);
+                ballEntity.moveTo(centerX - 150, centerY + 100, 1.3);
+                
+                const placeholderRopes = [];
+                for (let i = 0; i < 5; i++) {
+                    const r = new JumpRope({ color: 'var(--rope-color)' });
+                    r.appear(centerX + 40 + i * 50, centerY + 100, 1, 0.5);
+                    placeholderRopes.push(r);
+                }
+                entities.push(...placeholderRopes);
+                break;
+
+            case 'perform_substitution':
+                const mainBall = entities.find(e => e instanceof Basketball);
+                mainBall.disappear();
+                
+                // Make placeholder ropes solid
+                const phRopes = entities.filter(e => e instanceof JumpRope && e.opacity < 1);
+                phRopes.forEach((r, i) => r.moveTo(r.targetX, r.targetY, 1, 1));
+                
+                setTimeout(() => {
+                    entities = entities.filter(e => e !== mainBall);
+                }, 500);
+                break;
+                
+            case 'show_total_ropes':
+                // Move all ropes together
+                const allRopes = entities.filter(e => e instanceof JumpRope);
+                allRopes.forEach((rope, i) => {
+                    rope.moveTo(centerX - 150 + i * 50, centerY + 100);
+                });
+                break;
+
+            case 'show_rope_price_calc':
+                showMathCard("49 ÷ 7 = ?", "每根跳绳的价格");
+                break;
+
+            case 'execute_rope_price_calc':
+                 entities.filter(e => e instanceof JumpRope).forEach(e => e.disappear());
+                 entities.filter(e => e instanceof Coin).forEach(e => e.disappear());
+
+                 setTimeout(() => {
+                    entities = [];
+                    const finalRope = new JumpRope({ color: 'var(--rope-color)' });
+                    finalRope.appear(centerX - 50, centerY);
+                    const finalCoins = [];
+                    for(let i=0; i<7; i++) {
+                        const c = new Coin({color: 'var(--coin-color)'});
+                        c.appear(centerX + 50 + (i%4)*30, centerY -15 + Math.floor(i/4)*30, 0.8);
+                        finalCoins.push(c);
+                    }
+                    entities.push(finalRope, ...finalCoins);
+                 }, 500);
+                showMathCard("49 ÷ 7 = 7", "跳绳单价：7元");
+                break;
+            
+            case 'prepare_ball_price_calc':
+                entities.forEach(e => e.disappear());
+                setTimeout(() => entities = [], 500);
+                break;
+
+            case 'show_ball_price_calc':
+                const ropePrice = 7;
+                const ballPriceRopes = [];
+                for(let i=0; i<5; i++) {
+                    const r = new JumpRope({color: 'var(--rope-color)'});
+                    r.appear(centerX - 150 + i * 50, centerY);
+                    ballPriceRopes.push(r);
+                }
+                entities.push(...ballPriceRopes);
+                showMathCard("7 × 5 = ?", "篮球的价格");
+                break;
+
+            case 'execute_ball_price_calc':
+                entities.forEach(e => e.disappear());
+                setTimeout(() => {
+                    entities = [];
+                    const finalBall = new Basketball({ color: 'var(--ball-color)' });
+                    finalBall.appear(centerX - 50, centerY, 1.2);
+                    const finalBallCoins = [];
+                    for(let i=0; i<5; i++) { // 35 yuan = 5 * 7
+                        const c = new Coin({color: 'var(--coin-color)'});
+                        c.appear(centerX + 50 + (i%3)*30, centerY -15 + Math.floor(i/3)*30, 0.8);
+                        finalBallCoins.push(c);
+                    }
+                    entities.push(finalBall);
+                }, 500);
+                 showMathCard("7 × 5 = 35", "篮球单价：35元");
+                break;
+
+            case 'final_summary':
+                entities.forEach(e => e.disappear());
+                 setTimeout(() => {
+                    entities = [];
+                    const summaryRope = new JumpRope({ color: 'var(--rope-color)' });
+                    const summaryBall = new Basketball({ color: 'var(--ball-color)' });
+                    summaryRope.appear(centerX - 120, centerY);
+                    summaryBall.appear(centerX + 120, centerY, 1.2);
+                    entities.push(summaryRope, summaryBall);
+                 }, 500);
+                showMathCard("跳绳: 7元, 篮球: 35元", "问题解决");
+                break;
+        }
+    }
+    
+    let lastTime = 0;
+    function loop(timestamp) {
+        if (!startTime) {
+            startTime = timestamp;
+            lastTime = timestamp;
+        }
+        const elapsed = timestamp - startTime;
+        const deltaTime = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
+
+        // Script runner
+        const nextStepIndex = currentStep + 1;
+        if (nextStepIndex < script.length && elapsed >= script[nextStepIndex].t) {
+            currentStep = nextStepIndex;
+            const step = script[currentStep];
+
+            subtitleBox.classList.remove('visible');
+            setTimeout(() => {
+                subCN.textContent = step.cn;
+                subEN.textContent = step.en;
+                subtitleBox.classList.add('visible');
+            }, 200);
+
+            executeAction(step.action);
+        }
+
+        // Update and draw
+        ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+        entities.forEach(entity => {
+            entity.update(deltaTime);
+            entity.draw(ctx);
+        });
+
+        // Update progress bar
+        const progress = Math.min(elapsed / totalDuration, 1);
+        progressBar.style.width = `${progress * 100}%`;
+
+        if (elapsed < totalDuration) {
+            requestAnimationFrame(loop);
+        } else {
+             progressBar.style.width = '100%';
+        }
+    }
+
+    window.addEventListener('resize', setup);
+    setup();
+    requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   fogsight:
     build: .
     ports:
-      - "${HOST_PORT:-8000}:8000"
+      - "${HOST_PORT:-8011}:8000"
     volumes:
       - ./credentials.json:/app/credentials.json:ro
     environment:

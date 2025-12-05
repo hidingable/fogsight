@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fogsight 动画解题：关于除法和乘法关系的应用题</title>
+    <style>
+        :root {
+            --c-primary: #89CFF0;
+            --c-secondary: #C9E4DE;
+            --c-accent: #FFC0CB;
+            --c-background: #FDF6F6;
+            --c-text-main: #333;
+            --c-text-light: #555;
+            --font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft Yahei", sans-serif;
+            --anim-enter-main: 1.0s cubic-bezier(0.34, 1.56, 0.64, 1);
+            --anim-fade-soft: 0.6s ease-in-out;
+            --anim-fade-text: 0.5s ease-in-out;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f2f5;
+            font-family: var(--font-family);
+        }
+
+        #cinema-container {
+            position: relative;
+            width: 90vw;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+            background: var(--c-background);
+            background-image: radial-gradient(circle at top left, #FFFFFF 0%, #FDF6F6 100%);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .overlay-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2% 4%;
+            box-sizing: border-box;
+            z-index: 250; /* Above hints, below subtitle */
+        }
+
+        .header {
+            text-align: left;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        .header.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .header .title {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--c-text-main);
+            margin: 0;
+        }
+        .header .subtitle-topic {
+            font-size: 15px;
+            font-weight: 400;
+            color: var(--c-text-light);
+        }
+        
+        .math-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            padding: 20px 30px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            opacity: 0;
+            transition: opacity var(--anim-fade-soft), transform var(--anim-enter-main);
+            z-index: 200; /* As per hint layer */
+        }
+        .math-card.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .math-card .math-text {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--c-text-main);
+        }
+        .math-card .math-sub {
+            font-size: 14px;
+            color: var(--c-text-light);
+            margin-top: 5px;
+        }
+        .math-card .math-text span.accent {
+             color: var(--c-accent);
+        }
+
+        .subtitle-box {
+            position: absolute;
+            bottom: 4%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            padding: 12px 20px;
+            background-color: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 10px;
+            text-align: center;
+            color: white;
+            z-index: 300;
+            opacity: 0;
+            transform: translate(-50%, 10px);
+            transition: opacity var(--anim-fade-text), transform var(--anim-fade-text);
+        }
+
+        .subtitle-box.visible {
+            opacity: 1;
+            transform: translateX(-50%);
+        }
+
+        .subtitle-cn {
+            display: block;
+            font-size: 16px;
+            font-weight: 500;
+            line-height: 1.5;
+        }
+        .subtitle-en {
+            display: block;
+            font-size: 14px;
+            font-weight: 400;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--c-primary);
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+    <div id="cinema-container">
+        <canvas id="canvas"></canvas>
+        <div class="overlay-layer">
+            <div class="header" id="header">
+                <h1 class="title">关于除法和乘法关系的应用题</h1>
+                <span class="subtitle-topic">学校用盆花摆图案，原计划每9盆摆一个，后改为每8盆摆一个。</span>
+            </div>
+        </div>
+        <div class="math-card" id="mathCard">
+            <div class="math-text" id="mathContent"></div>
+            <div class="math-sub" id="mathLabel"></div>
+        </div>
+        <div class="subtitle-box" id="subtitleBox">
+            <span class="subtitle-cn" id="subCN"></span>
+            <span class="subtitle-en" id="subEN"></span>
+        </div>
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <script>
+        const blueprint = { "meta": { "topic": "关于除法和乘法关系的应用题", "question": "学校⽤盆花摆⼀定数量的相同图案。每 9 盆摆⼀个图案，需要 63 盆。但盆花的数量不够，只能⽤ 8 盆摆⼀个图案。要摆⼏个图案？最后⽤了多少盆花？" }, "analysis": { "mode": "word_problem", "roles": [{ "id": "school", "label": "学校", "type": "place" }, { "id": "flower_pot", "label": "盆花", "type": "object" }, { "id": "pattern", "label": "图案", "type": "object" }], "knowns": [{ "id": "original_pots_per_pattern", "label": "原计划每个图案用的盆花数", "value": 9, "unit": "盆", "fromText": "每 9 盆摆⼀个图案" }, { "id": "total_pots_needed", "label": "原计划需要的总盆花数", "value": 63, "unit": "盆", "fromText": "需要 63 盆" }, { "id": "actual_pots_per_pattern", "label": "实际每个图案用的盆花数", "value": 8, "unit": "盆", "fromText": "只能⽤ 8 盆摆⼀个图案" }], "unknowns": [{ "id": "num_patterns_to_arrange", "question": "可以摆几个图案", "unit": "个", "fromText": "要摆⼏个图案？" }, { "id": "total_pots_used", "question": "最后用了多少盆花", "unit": "盆", "fromText": "最后⽤了多少盆花？" }], "concepts": [], "relations": [{ "id": "rel_total_pots_patterns_relation", "description": "总盆花数 = 每个图案的盆花数 × 图案数量", "type": "公式" }, { "id": "rel_same_num_patterns", "description": "无论每个图案用几盆花，要摆的图案数量是相同的。", "type": "条件" }], "steps": [{ "id": "step_1", "order": 1, "goal": "先根据原计划求出要摆的图案总数", "usesKnown": ["total_pots_needed", "original_pots_per_pattern"], "dependsOnSteps": [], "produces": ["num_patterns_to_arrange"], "explanation": "题目中“学校⽤盆花摆⼀定数量的相同图案”是关键。无论每组是9盆还是8盆，要摆的图案数量是不变的。所以我们可以用原计划的数据求出图案数量。", "expression_nl": "图案数量 = 原计划总盆花数 ÷ 原计划每个图案的盆花数" }, { "id": "step_2", "order": 2, "goal": "再根据图案总数和实际每图案盆花数，求出实际用掉的总盆花数", "usesKnown": ["actual_pots_per_pattern"], "dependsOnSteps": ["step_1"], "produces": ["total_pots_used"], "explanation": "我们已经知道了要摆的图案数量，也知道实际情况下每个图案用了8盆花，把它们乘起来就是实际总共用了多少盆花。", "expression_nl": "实际总用花数 = 图案数量 × 实际每个图案的盆花数" }], "result": { "id": "final_answer_summary", "label": "最终答案", "value": null, "unit": null, "fromStepId": "step_2", "explanation": "通过先确定不变的“图案数量”，再用这个数量去计算改变条件后的“总盆花数”，我们得到了两个问题的答案。" } }, "anchors": { "C": { "x": 50, "y": 50 }, "LC": { "x": 25, "y": 50 }, "RC": { "x": 75, "y": 50 }, "TC": { "x": 50, "y": 20 }, "BC": { "x": 50, "y": 80 }, "OFF_L": { "x": -20, "y": 50 }, "OFF_R": { "x": 120, "y": 50 } }, "assets": [{ "id": "obj_flower_pot", "type": "svg/icon", "role": "main", "bindRoleId": "flower_pot", "bindStepId": null, "desc": "代表一盆盆花的图标。" }, { "id": "obj_pattern_original", "type": "diagram", "role": "secondary", "bindRoleId": "pattern", "bindStepId": "step_1", "desc": "代表由9盆花组成的一个图案。" }, { "id": "obj_pattern_actual", "type": "diagram", "role": "secondary", "bindRoleId": "pattern", "bindStepId": "step_2", "desc": "代表由8盆花组成的一个图案。" }, { "id": "obj_pattern_placeholder", "type": "svg/shape", "role": "secondary", "bindRoleId": "pattern", "bindStepId": null, "desc": "代表一个图案的占位符，用于展示图案总数。" }], "timeline": [{ "id": "scene_1", "stage": "intro", "duration": 5, "stepRef": null, "mainAssets": ["obj_flower_pot", "obj_pattern_original"], "secondaryAssets": [], "subtitle": { "cn": "来读题，学校要用盆花摆图案。", "en": "Let's read the problem. A school uses flower pots to make patterns." } }, { "id": "scene_2", "stage": "process", "duration": 8, "stepRef": "step_1", "mainAssets": ["txt_question_1", "txt_step1_formula", "obj_pattern_placeholder"], "secondaryAssets": ["obj_flower_pot", "obj_pattern_original"], "subtitle": { "cn": "第1步：先用原计划的数据，算出要摆几个图案。", "en": "Step 1: Use the original plan's data to find the number of patterns." } }, { "id": "scene_3", "stage": "process", "duration": 8, "stepRef": "step_2", "mainAssets": ["txt_question_2", "txt_step2_formula", "obj_pattern_actual"], "secondaryAssets": ["obj_flower_pot", "obj_pattern_placeholder"], "subtitle": { "cn": "第2步：再根据图案数量，算出实际用了多少盆花。", "en": "Step 2: Calculate the total pots actually used based on the number of patterns." } }, { "id": "scene_4", "stage": "conclusion", "duration": 6, "stepRef": null, "mainAssets": ["txt_step1_formula", "txt_step2_formula"], "secondaryAssets": [], "subtitle": { "cn": "回顾一下，这道题的关键是先求出不变的“图案数量”。", "en": "To review, the key is to first find the unchanged 'number of patterns'." } }] };
+        const runtimeConfig = { "layers": { "background": 0, "secondary": 80, "main": 100, "hint": 200, "subtitle": 300 }, "maxVisible": { "main": 2, "secondary": 3 }, "textAreas": { "stepCard": { "anchor": "BC", "offsetY": "-15%", "width": "70%", "maxLinesCn": 2, "maxLinesEn": 3 }, "subtitle": { "anchor": "BC", "offsetY": "0%", "offsetFromBottom": "4%", "width": "80%" } }, "animationPresets": { "enterMain": { "duration": 1, "timingFunction": "cubic-bezier(0.34, 1.56, 0.64, 1)" }, "fadeSoft": { "duration": 0.6, "timingFunction": "ease-in-out" }, "fadeText": { "duration": 0.5, "timingFunction": "ease-in-out" } } };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const container = document.getElementById('cinema-container');
+            const progressBar = document.getElementById('progressBar');
+            const headerEl = document.getElementById('header');
+            const mathCard = document.getElementById('mathCard');
+            const mathContent = document.getElementById('mathContent');
+            const mathLabel = document.getElementById('mathLabel');
+            const subtitleBox = document.getElementById('subtitleBox');
+            const subCN = document.getElementById('subCN');
+            const subEN = document.getElementById('subEN');
+
+            let width, height, dpr, ANCHORS;
+
+            const lerp = (a, b, t) => a + (b - a) * t;
+
+            function resize() {
+                const rect = container.getBoundingClientRect();
+                dpr = window.devicePixelRatio || 1;
+                width = rect.width;
+                height = rect.height;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                canvas.style.width = `${width}px`;
+                canvas.style.height = `${height}px`;
+                ctx.scale(dpr, dpr);
+                
+                ANCHORS = {};
+                for (const key in blueprint.anchors) {
+                    ANCHORS[key] = {
+                        x: blueprint.anchors[key].x / 100 * width,
+                        y: blueprint.anchors[key].y / 100 * height
+                    };
+                }
+            }
+
+            class Drawable {
+                constructor(id, { x = 0, y = 0, scale = 1, opacity = 0 }) {
+                    this.id = id;
+                    this.x = x; this.y = y;
+                    this.scale = scale; this.opacity = opacity;
+                    this.targetX = x; this.targetY = y;
+                    this.targetScale = scale; this.targetOpacity = opacity;
+                    this.visible = false;
+                }
+                update(dt) {
+                    const rate = 1 - Math.exp(-dt * 5); // smooth damping
+                    this.x = lerp(this.x, this.targetX, rate);
+                    this.y = lerp(this.y, this.targetY, rate);
+                    this.scale = lerp(this.scale, this.targetScale, rate);
+                    this.opacity = lerp(this.opacity, this.targetOpacity, rate);
+                }
+                draw(ctx) { /* To be implemented by subclasses */ }
+            }
+
+            class FlowerPot extends Drawable {
+                draw(ctx) {
+                    if (this.opacity < 0.01) return;
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.scale(this.scale, this.scale);
+                    ctx.globalAlpha = this.opacity;
+                    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--c-primary').trim();
+                    ctx.strokeStyle = '#6a737b';
+                    ctx.lineWidth = 2;
+                    // Pot
+                    ctx.beginPath();
+                    ctx.moveTo(-15, 15); ctx.lineTo(-10, -10);
+                    ctx.lineTo(10, -10); ctx.lineTo(15, 15);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Rim
+                    ctx.fillRect(-18, -15, 36, 5);
+                    // Plant
+                    ctx.strokeStyle = '#5DBB63';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -15); ctx.quadraticCurveTo(-10, -25, -5, -35);
+                    ctx.moveTo(0, -15); ctx.quadraticCurveTo(10, -25, 5, -35);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+            
+            class Pattern extends Drawable {
+                constructor(id, options, potCount = 9) {
+                    super(id, options);
+                    this.potCount = potCount;
+                    this.potSize = options.potSize || 30;
+                }
+                 draw(ctx) {
+                    if (this.opacity < 0.01) return;
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.scale(this.scale, this.scale);
+                    ctx.globalAlpha = this.opacity;
+                    
+                    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--c-primary').trim();
+                    
+                    const rows = this.potCount === 9 ? 3 : 2;
+                    const cols = this.potCount === 9 ? 3 : 4;
+                    const spacing = this.potSize * 1.2;
+                    const totalWidth = (cols - 1) * spacing;
+                    const totalHeight = (rows - 1) * spacing;
+
+                    for (let i = 0; i < this.potCount; i++) {
+                        const r = Math.floor(i / cols);
+                        const c = i % cols;
+                        const px = c * spacing - totalWidth / 2;
+                        const py = r * spacing - totalHeight / 2;
+                        
+                        // Simplified pot
+                        ctx.beginPath();
+                        ctx.moveTo(px - this.potSize/3, py + this.potSize/3);
+                        ctx.lineTo(px - this.potSize/4, py - this.potSize/4);
+                        ctx.lineTo(px + this.potSize/4, py - this.potSize/4);
+                        ctx.lineTo(px + this.potSize/3, py + this.potSize/3);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                }
+            }
+
+            class PatternPlaceholder extends Drawable {
+                constructor(id, options, text = '?') {
+                    super(id, options);
+                    this.text = text;
+                    this.w = 100;
+                    this.h = 100;
+                }
+                draw(ctx) {
+                    if (this.opacity < 0.01) return;
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.scale(this.scale, this.scale);
+                    ctx.globalAlpha = this.opacity;
+
+                    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--c-secondary').trim();
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([8, 8]);
+                    ctx.strokeRect(-this.w / 2, -this.h / 2, this.w, this.h);
+                    ctx.setLineDash([]);
+                    
+                    ctx.fillStyle = getComputedstyle(document.documentElement).getPropertyValue('--c-secondary').trim();
+                    ctx.font = `${60 * this.scale}px ${getComputedStyle(document.documentElement).getPropertyValue('--font-family')}`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(this.text, 0, 0);
+
+                    ctx.restore();
+                }
+            }
+            
+            const drawableMap = {};
+
+            function initDrawables() {
+                drawableMap['obj_flower_pot'] = new FlowerPot('obj_flower_pot', { opacity: 0 });
+                drawableMap['obj_pattern_original'] = new Pattern('obj_pattern_original', { opacity: 0 }, 9);
+                drawableMap['obj_pattern_actual'] = new Pattern('obj_pattern_actual', { opacity: 0 }, 8);
+                drawableMap['obj_pattern_placeholder'] = new PatternPlaceholder('obj_pattern_placeholder', { opacity: 0 }, '?');
+            }
+
+            const script = [];
+            let totalDuration = 0;
+
+            function buildScript() {
+                let currentTime = 500; // Start with a small delay
+                blueprint.timeline.forEach(scene => {
+                    const step = scene.stepRef ? blueprint.analysis.steps.find(s => s.id === scene.stepRef) : null;
+                    let cn = scene.subtitle.cn;
+                    if(step) {
+                        cn = `第${step.order}步：${step.goal}`;
+                    }
+
+                    script.push({
+                        t: currentTime,
+                        cn: cn,
+                        en: scene.subtitle.en,
+                        action: `${scene.stage}_scene`,
+                        scene: scene,
+                        step: step,
+                        executed: false,
+                    });
+                    
+                    // Add sub-actions within a scene
+                    if(scene.stage === 'process' && step) {
+                        if (step.id === 'step_1') {
+                            script.push({ t: currentTime + 2000, action: 'show_equation', equation: '63 ÷ 9 = 7', label: '图案的数量 (个)', executed: false });
+                        } else if (step.id === 'step_2') {
+                            script.push({ t: currentTime + 2000, action: 'show_equation', equation: '7 × 8 = 56', label: '实际用掉的总盆花数 (盆)', executed: false });
+                        }
+                    }
+
+                    currentTime += scene.duration * 1000;
+                });
+                totalDuration = currentTime + 1000; // Add buffer at the end
+            }
+            
+            let sceneObjects = [];
+            function executeAction(action, data) {
+                // Hide math card by default
+                if (action !== 'show_equation') {
+                    mathCard.classList.remove('visible');
+                }
+
+                // Fade out all objects before a new scene starts
+                if (action.endsWith('_scene')) {
+                    Object.values(drawableMap).forEach(obj => {
+                        obj.targetOpacity = 0;
+                        obj.targetScale = 0.8;
+                    });
+                }
+                
+                switch (action) {
+                    case 'intro_scene':
+                        headerEl.classList.add('visible');
+                        const pot = drawableMap['obj_flower_pot'];
+                        pot.targetX = ANCHORS.LC.x;
+                        pot.targetY = ANCHORS.LC.y;
+                        pot.targetOpacity = 1;
+                        pot.targetScale = 1.2;
+
+                        const pattern9 = drawableMap['obj_pattern_original'];
+                        pattern9.targetX = ANCHORS.RC.x;
+                        pattern9.targetY = ANCHORS.RC.y;
+                        pattern9.targetOpacity = 1;
+                        pattern9.targetScale = 1.0;
+                        break;
+
+                    case 'process_scene':
+                        if (data.step.id === 'step_1') {
+                            const placeholder = drawableMap['obj_pattern_placeholder'];
+                            placeholder.targetX = ANCHORS.RC.x;
+                            placeholder.targetY = ANCHORS.RC.y;
+                            placeholder.targetOpacity = 1;
+                            placeholder.targetScale = 1.2;
+                            placeholder.text = '?';
+                        }
+                        if (data.step.id === 'step_2') {
+                            const placeholder = drawableMap['obj_pattern_placeholder'];
+                            placeholder.text = '7'; // Result from step 1
+                            placeholder.targetX = ANCHORS.LC.x;
+                            placeholder.targetY = ANCHors.LC.y;
+                            placeholder.targetOpacity = 1;
+                            placeholder.targetScale = 1;
+                            
+                            const pattern8 = drawableMap['obj_pattern_actual'];
+                            pattern8.targetX = ANCHORS.RC.x;
+                            pattern8.targetY = ANCHORS.RC.y;
+                            pattern8.targetOpacity = 1;
+                            pattern8.targetScale = 1.2;
+                        }
+                        break;
+                    
+                    case 'show_equation':
+                        mathContent.innerHTML = data.equation.replace(/(\d+)/g, '<span class="accent">$1</span>');
+                        mathLabel.textContent = data.label;
+                        mathCard.classList.add('visible');
+                        if (data.equation.includes('7')) {
+                            const placeholder = drawableMap['obj_pattern_placeholder'];
+                            placeholder.text = '7';
+                        }
+                        break;
+
+                    case 'conclusion_scene':
+                        // Final recap, maybe show the two formulas side by side
+                        break;
+                }
+            }
+
+            let startTime = null;
+            let currentScriptIndex = 0;
+
+            function loop(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const elapsed = timestamp - startTime;
+                const dt = (timestamp - (lastTime || timestamp)) / 1000;
+                lastTime = timestamp;
+
+                // Update Progress
+                const progress = Math.min(elapsed / totalDuration, 1);
+                progressBar.style.width = `${progress * 100}%`;
+
+                // Execute script actions
+                while (currentScriptIndex < script.length && script[currentScriptIndex].t <= elapsed) {
+                    const step = script[currentScriptIndex];
+                    if (!step.executed) {
+                        if (step.cn) {
+                            subtitleBox.classList.remove('visible');
+                            setTimeout(() => {
+                                subCN.textContent = step.cn;
+                                subEN.textContent = step.en || '';
+                                subtitleBox.classList.add('visible');
+                            }, 150);
+                        }
+                        executeAction(step.action, step);
+                        step.executed = true;
+                    }
+                    currentScriptIndex++;
+                }
+
+                // Update and Draw
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.save();
+                ctx.scale(dpr, dpr);
+
+                for (const obj of Object.values(drawableMap)) {
+                    obj.update(dt);
+                    obj.draw(ctx);
+                }
+                ctx.restore();
+
+                if (elapsed < totalDuration + 2000) { // Play for 2 more seconds
+                    requestAnimationFrame(loop);
+                } else {
+                    // Optional: loop animation
+                    // startTime = null; currentScriptIndex = 0; script.forEach(s => s.executed = false);
+                    // requestAnimationFrame(loop);
+                }
+            }
+            let lastTime = null;
+
+            // Initialization
+            window.addEventListener('resize', resize);
+            resize();
+            initDrawables();
+            buildScript();
+            requestAnimationFrame(loop);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fogsight · 数学动画：花盆摆放问题</title>
+    <style>
+        :root {
+            --bg-color: #f0fff0;
+            --primary-text: #333;
+            --secondary-text: #666;
+            --accent-color: #ff6b6b;
+            --progress-bar-color: #4CAF50;
+            --subtitle-bg: rgba(0, 0, 0, 0.6);
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --card-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, "Microsoft Yahei", "Noto Sans SC", sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #cinema-container {
+            width: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+            position: relative;
+            background-color: #e6f7ff;
+            background-image: linear-gradient(135deg, #e0f7fa 0%, #f5f5f5 100%);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .overlay-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .header {
+            position: absolute;
+            top: 4%;
+            left: 4%;
+            text-align: left;
+            color: var(--primary-text);
+        }
+
+        .header .title {
+            font-size: 2.2vw;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .header .subtitle-topic {
+            font-size: 1.4vw;
+            margin-top: 5px;
+            color: var(--secondary-text);
+        }
+
+        .math-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            padding: 2vw 3vw;
+            background: var(--card-bg);
+            border-radius: 15px;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(8px);
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-align: center;
+        }
+
+        .math-card.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .math-text {
+            font-size: 3vw;
+            font-weight: 500;
+            color: var(--primary-text);
+        }
+
+        .math-sub {
+            font-size: 1.5vw;
+            color: var(--secondary-text);
+            margin-top: 0.5vw;
+        }
+
+        .subtitle-box {
+            position: absolute;
+            bottom: 6%;
+            left: 50%;
+            transform: translateX(-50%) scale(0.95);
+            width: 80%;
+            max-width: 900px;
+            padding: 1vw 1.5vw;
+            background: var(--subtitle-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.4s ease;
+        }
+        
+        .subtitle-box.visible {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+
+        .subtitle-cn {
+            font-size: 1.8vw;
+            display: block;
+        }
+
+        .subtitle-en {
+            font-size: 1.1vw;
+            opacity: 0.7;
+            display: block;
+            margin-top: 4px;
+        }
+
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-bar {
+            width: 0;
+            height: 100%;
+            background-color: var(--progress-bar-color);
+            transition: width 0.1s linear;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="cinema-container">
+        <canvas id="canvas"></canvas>
+
+        <div class="overlay-layer">
+            <div class="header" id="header">
+                <h1 class="title">花盆摆放问题</h1>
+                <span class="subtitle-topic">根据条件变化计算总量</span>
+            </div>
+
+            <div class="math-card" id="mathCard">
+                <div class="math-text" id="mathContent"></div>
+                <div class="math-sub" id="mathLabel"></div>
+            </div>
+
+            <div class="subtitle-box" id="subtitleBox">
+                <span class="subtitle-cn" id="subCN"></span>
+                <span class="subtitle-en" id="subEN"></span>
+            </div>
+        </div>
+
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const subCN = document.getElementById('subCN');
+        const subEN = document.getElementById('subEN');
+        const subtitleBox = document.getElementById('subtitleBox');
+
+        const mathCard = document.getElementById('mathCard');
+        const mathContent = document.getElementById('mathContent');
+        const mathLabel = document.getElementById('mathLabel');
+
+        const progressBar = document.getElementById('progressBar');
+
+        let dpr, canvasWidth, canvasHeight, startTime = null, lastFrameTime = 0;
+        let flowerPots = [];
+        const executedActions = new Set();
+        
+        const script = [
+            { t: 500,  cn: "学校计划用盆花摆放一些漂亮的图案。", en: "A school plans to arrange flower pots into beautiful patterns.", action: "intro_scene" },
+            { t: 4000, cn: "按照原来的计划，每9盆花可以组成一个图案。", en: "According to the original plan, each pattern consists of 9 pots.", action: "show_one_group" },
+            { t: 8000, cn: "摆放所有图案总共需要63盆花。", en: "A total of 63 pots are needed to create all the patterns.", action: "show_all_pots_initial" },
+            { t: 12000, cn: "那么，原计划要摆放多少个图案呢？", en: "So, how many patterns were planned initially?", action: "ask_division" },
+            { t: 14000, cn: "我们可以用总数除以每组的数量，63 ÷ 9 = 7。", en: "We can divide the total number by the quantity per group: 63 ÷ 9 = 7.", action: "show_division_result" },
+            { t: 17000, cn: "所以，学校原计划摆放7个图案。", en: "Therefore, the school originally planned to arrange 7 patterns.", action: "group_the_pots" },
+            { t: 21000, cn: "但是，学校发现盆花的数量不够。", en: "However, the school found that there were not enough pots.", action: "hide_math_card" },
+            { t: 24000, cn: "所以他们改变了方案，现在每个图案只用8盆花。", en: "So they changed the plan. Now, each pattern uses only 8 pots.", action: "change_rule" },
+            { t: 28000, cn: "图案的数量保持不变，仍然是7个。", en: "The number of patterns remains the same, which is 7.", action: "confirm_groups" },
+            { t: 31000, cn: "现在，总共需要多少盆花呢？", en: "Now, how many pots are needed in total?", action: "ask_multiplication" },
+            { t: 33000, cn: "我们将图案数量乘以每个图案的花盆数：7 × 8 = 56。", en: "We multiply the number of patterns by the pots per pattern: 7 × 8 = 56.", action: "show_multiplication_result" },
+            { t: 37000, cn: "所以，最后实际用了56盆花。", en: "So, in the end, 56 pots were actually used.", action: "show_final_answer" },
+            { t: 41000, cn: "动画结束，感谢观看！", en: "Animation finished. Thanks for watching!", action: "end_scene" }
+        ];
+
+        const totalDuration = script[script.length - 1].t + 2000;
+
+        // --- 教具类 ---
+        class FlowerPot {
+            constructor(config) {
+                this.x = config.x || 0;
+                this.y = config.y || 0;
+                this.targetX = this.x;
+                this.targetY = this.y;
+                
+                this.scale = config.scale || 0;
+                this.targetScale = config.targetScale || 1;
+                
+                this.opacity = config.opacity || 0;
+                this.targetOpacity = config.targetOpacity || 1;
+                
+                this.color = config.color || '#ff7b54'; // Pot color
+                this.soilColor = '#8c5e3c'; // Soil color
+                this.plantColor = '#6ab04c'; // Plant color
+                
+                this.lerpFactor = 0.08;
+            }
+
+            update() {
+                this.x += (this.targetX - this.x) * this.lerpFactor;
+                this.y += (this.targetY - this.y) * this.lerpFactor;
+                this.scale += (this.targetScale - this.scale) * this.lerpFactor;
+                this.opacity += (this.targetOpacity - this.opacity) * this.lerpFactor;
+            }
+
+            draw(ctx) {
+                if (this.scale < 0.01 || this.opacity < 0.01) return;
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.scale(this.scale, this.scale);
+                ctx.globalAlpha = this.opacity;
+
+                const w = 30; // base width
+                const h = 28; // base height
+
+                // Shadow
+                ctx.beginPath();
+                ctx.ellipse(0, h * 0.5 + 2, w * 0.5, w * 0.15, 0, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(0,0,0,0.1)';
+                ctx.fill();
+
+                // Pot
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.moveTo(-w * 0.5, -h * 0.5);
+                ctx.lineTo(w * 0.5, -h * 0.5);
+                ctx.lineTo(w * 0.4, h * 0.5);
+                ctx.lineTo(-w * 0.4, h * 0.5);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Pot Rim
+                ctx.fillStyle = '#ff9a76';
+                ctx.fillRect(-w * 0.55, -h * 0.5 - 4, w * 1.1, 4);
+
+                // Soil
+                ctx.fillStyle = this.soilColor;
+                ctx.fillRect(-w * 0.5, -h * 0.5, w, 5);
+
+                // Plant
+                ctx.fillStyle = this.plantColor;
+                ctx.beginPath();
+                ctx.arc(-w * 0.2, -h * 0.5 - 10, 8, Math.PI, Math.PI * 1.8);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(w * 0.2, -h * 0.5 - 10, 8, Math.PI * 1.2, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+        }
+
+        // --- 初始化和自适应 ---
+        function setupCanvas() {
+            const container = document.getElementById('cinema-container');
+            const rect = container.getBoundingClientRect();
+            dpr = window.devicePixelRatio || 1;
+            canvasWidth = rect.width;
+            canvasHeight = rect.height;
+            canvas.width = canvasWidth * dpr;
+            canvas.height = canvasHeight * dpr;
+            canvas.style.width = `${canvasWidth}px`;
+            canvas.style.height = `${canvasHeight}px`;
+            ctx.scale(dpr, dpr);
+        }
+
+        // --- 动画循环 ---
+        function loop(timestamp) {
+            if (!startTime) {
+                startTime = timestamp;
+            }
+            const elapsed = timestamp - startTime;
+            
+            // --- 更新脚本 ---
+            const currentScripts = script.filter(s => s.t <= elapsed && !executedActions.has(s.t));
+            if (currentScripts.length > 0) {
+                const step = currentScripts[currentScripts.length - 1]; // Use the latest one if multiple trigger
+                subCN.textContent = step.cn;
+                subEN.textContent = step.en;
+                subtitleBox.classList.add('visible');
+                
+                currentScripts.forEach(s => {
+                    executeAction(s.action);
+                    executedActions.add(s.t);
+                });
+            }
+            
+            // --- 清除和绘制 ---
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+            flowerPots.forEach(pot => {
+                pot.update();
+                pot.draw(ctx);
+            });
+
+            // --- 更新进度条 ---
+            const progress = Math.min(elapsed / totalDuration, 1);
+            progressBar.style.width = `${progress * 100}%`;
+            
+            if (elapsed < totalDuration) {
+                requestAnimationFrame(loop);
+            }
+        }
+
+        // --- 动作执行 ---
+        function executeAction(action) {
+            const centerX = canvasWidth / 2;
+            const centerY = canvasHeight / 2;
+            
+            if (action === "intro_scene") {
+                // Initial state is empty
+            } else if (action === "show_one_group") {
+                flowerPots = [];
+                const potSize = 40;
+                for (let i = 0; i < 9; i++) {
+                    const row = Math.floor(i / 3);
+                    const col = i % 3;
+                    const pot = new FlowerPot({
+                        x: centerX + (col - 1) * potSize,
+                        y: centerY + (row - 1) * potSize,
+                        targetScale: 1,
+                        targetOpacity: 1
+                    });
+                    flowerPots.push(pot);
+                }
+            } else if (action === "show_all_pots_initial") {
+                flowerPots.forEach(pot => {
+                    pot.targetScale = 0;
+                    pot.targetOpacity = 0;
+                });
+                setTimeout(() => {
+                    flowerPots = [];
+                    const potSize = 35;
+                    const spacing = 45;
+                    for (let i = 0; i < 63; i++) {
+                        const row = Math.floor(i / 9);
+                        const col = i % 9;
+                        const pot = new FlowerPot({
+                            x: centerX - (4 * spacing) + col * spacing,
+                            y: centerY - (3 * spacing) + row * spacing,
+                            targetScale: 1,
+                            targetOpacity: 1
+                        });
+                        flowerPots.push(pot);
+                    }
+                }, 500); // Wait for old pots to shrink
+            } else if (action === "show_division_result") {
+                mathContent.textContent = "63 ÷ 9 = 7";
+                mathLabel.textContent = "原计划图案数量 (个)";
+                mathCard.classList.add('visible');
+            } else if (action === "group_the_pots") {
+                const groupWidth = 150;
+                const groupHeight = 150;
+                const groupSpacingX = 180;
+                const groupSpacingY = 180;
+                const potsPerGroup = 9;
+                
+                flowerPots.forEach((pot, i) => {
+                    const groupIndex = Math.floor(i / potsPerGroup);
+                    const indexInGroup = i % potsPerGroup;
+
+                    const groupRow = Math.floor(groupIndex / 4);
+                    const groupCol = groupIndex % 4;
+                    
+                    const groupCenterX = centerX - (1.5 * groupSpacingX) + groupCol * groupSpacingX;
+                    const groupCenterY = centerY - (0.5 * groupSpacingY) + groupRow * groupSpacingY;
+
+                    const localRow = Math.floor(indexInGroup / 3);
+                    const localCol = indexInGroup % 3;
+                    
+                    pot.targetX = groupCenterX + (localCol - 1) * 35;
+                    pot.targetY = groupCenterY + (localRow - 1) * 35;
+                });
+            } else if (action === "hide_math_card") {
+                 mathCard.classList.remove('visible');
+            } else if (action === "change_rule") {
+                for (let i = 0; i < 7; i++) {
+                    const lastPotInGroup = flowerPots[i * 9 + 8];
+                    if (lastPotInGroup) {
+                        lastPotInGroup.targetScale = 0;
+                        lastPotInGroup.targetOpacity = 0;
+                    }
+                }
+            } else if (action === "confirm_groups") {
+                 // The visual change is already done, this is a pause for narration
+            } else if (action === "show_multiplication_result") {
+                mathContent.textContent = "7 × 8 = 56";
+                mathLabel.textContent = "变化后所需总数 (盆)";
+                mathCard.classList.add('visible');
+            } else if (action === "show_final_answer") {
+                // Final answer is highlighted by the subtitle and card
+            } else if (action === "end_scene") {
+                flowerPots.forEach((pot, i) => {
+                    pot.targetY = canvasHeight + 100;
+                    pot.targetOpacity = 0;
+                });
+                mathCard.classList.remove('visible');
+            }
+        }
+        
+        // --- 启动 ---
+        window.addEventListener('resize', setupCanvas);
+        setupCanvas();
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>

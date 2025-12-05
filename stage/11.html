@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Story: Flower Patterns</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Nunito:wght@400;700&display=swap');
+
+        :root {
+            --bg-color: #F9F7F2;
+            --text-main: #4A4A4A;
+            --text-sub: #8C8C8C;
+            --accent-pink: #FF8FAB;
+            --accent-green: #A7C4A0;
+            --accent-blue: #A0C4FF;
+            --highlight: #FFD166;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #ECEAE4;
+            font-family: 'Nunito', 'Noto Sans SC', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #cinema-container {
+            position: relative;
+            width: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16/9;
+            background-color: var(--bg-color);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Overlays */
+        .overlay-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 1s ease;
+        }
+
+        .title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0;
+        }
+
+        .subtitle-box {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(5px);
+            padding: 20px 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            text-align: center;
+            margin-bottom: 20px;
+            transform: translateY(20px);
+            opacity: 0;
+            transition: all 0.5s ease;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .subtitle-cn {
+            font-size: 1.5rem;
+            color: var(--text-main);
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .subtitle-en {
+            font-size: 1rem;
+            color: var(--text-sub);
+            font-weight: 400;
+            display: block;
+        }
+
+        .math-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: white;
+            padding: 30px 50px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 10;
+        }
+
+        .math-text {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--text-main);
+        }
+
+        .math-sub {
+            font-size: 1.2rem;
+            color: var(--text-sub);
+            margin-top: 10px;
+        }
+
+        /* Animation Classes */
+        .fade-in { opacity: 1 !important; transform: translateY(0) !important; }
+        .pop-in { opacity: 1 !important; transform: translate(-50%, -50%) scale(1) !important; }
+        
+        /* Progress Bar */
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: rgba(0,0,0,0.05);
+        }
+        .progress-bar {
+            height: 100%;
+            background: var(--accent-pink);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="cinema-container">
+        <canvas id="canvas"></canvas>
+        
+        <div class="overlay-layer">
+            <div class="header" id="header">
+                <h1 class="title">数学应用题可视化</h1>
+                <span style="color: var(--text-sub)">盆花摆放问题 | Flower Arrangement Problem</span>
+            </div>
+
+            <!-- Math Equation Popup -->
+            <div class="math-card" id="mathCard">
+                <div class="math-text" id="mathContent">63 ÷ 9 = 7</div>
+                <div class="math-sub" id="mathLabel">Patterns needed</div>
+            </div>
+
+            <div class="subtitle-box" id="subtitleBox">
+                <span class="subtitle-cn" id="subCN">准备开始...</span>
+                <span class="subtitle-en" id="subEN">Ready to start...</span>
+            </div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+<script>
+/**
+ * 动画引擎 & 逻辑控制
+ */
+
+// Canvas Setup
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let width, height;
+let scaleFactor = 1;
+
+// UI Elements
+const elSubBox = document.getElementById('subtitleBox');
+const elSubCN = document.getElementById('subCN');
+const elSubEN = document.getElementById('subEN');
+const elMathCard = document.getElementById('mathCard');
+const elMathContent = document.getElementById('mathContent');
+const elMathLabel = document.getElementById('mathLabel');
+const elHeader = document.getElementById('header');
+const elProgress = document.getElementById('progressBar');
+
+// State
+let startTime = null;
+let totalDuration = 42000; // 42 seconds total
+let flowers = [];
+let groups = []; // Stores position data for the 7 groups
+
+// Colors
+const COLORS = {
+    petal: '#FF8FAB',
+    center: '#FFD166',
+    stem: '#A7C4A0',
+    pot: '#D4A373',
+    bg: '#F9F7F2',
+    grey: '#E0E0E0'
+};
+
+// --- Resize Handler ---
+function resize() {
+    const container = document.getElementById('cinema-container');
+    width = container.clientWidth;
+    height = container.clientHeight;
+    
+    // Handle Retina Display
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+    
+    scaleFactor = width / 1280; // Base scale on 1280px width
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Classes ---
+
+class Flower {
+    constructor(groupId, indexInGroup) {
+        this.groupId = groupId;
+        this.indexInGroup = indexInGroup;
+        
+        // Initial State (Hidden)
+        this.x = width / 2;
+        this.y = height + 100;
+        this.scale = 0;
+        this.opacity = 0;
+        this.targetX = 0;
+        this.targetY = 0;
+        this.targetScale = 1;
+        this.targetOpacity = 1;
+        
+        // Animation properties
+        this.visible = false;
+        this.colorState = 'normal'; // normal, fade, highlight
+    }
+
+    update(dt) {
+        // Smooth Lerp
+        const speed = 0.1;
+        this.x += (this.targetX - this.x) * speed;
+        this.y += (this.targetY - this.y) * speed;
+        this.scale += (this.targetScale - this.scale) * speed;
+        this.opacity += (this.targetOpacity - this.opacity) * speed;
+    }
+
+    draw(ctx) {
+        if (this.opacity < 0.01) return;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.scale, this.scale);
+        ctx.globalAlpha = this.opacity;
+
+        const r = 12 * scaleFactor; // Base radius
+
+        // Draw Pot
+        ctx.fillStyle = this.colorState === 'fade' ? COLORS.grey : COLORS.pot;
+        ctx.beginPath();
+        ctx.moveTo(-r*0.8, r);
+        ctx.lineTo(r*0.8, r);
+        ctx.lineTo(r*0.6, r*2);
+        ctx.lineTo(-r*0.6, r*2);
+        ctx.fill();
+
+        // Draw Stem
+        ctx.strokeStyle = this.colorState === 'fade' ? COLORS.grey : COLORS.stem;
+        ctx.lineWidth = 3 * scaleFactor;
+        ctx.beginPath();
+        ctx.moveTo(0, r);
+        ctx.lineTo(0, 0);
+        ctx.stroke();
+
+        // Draw Petals
+        ctx.fillStyle = this.colorState === 'fade' ? COLORS.grey : COLORS.petal;
+        for(let i=0; i<5; i++) {
+            ctx.beginPath();
+            ctx.rotate((Math.PI * 2) / 5);
+            ctx.arc(0, -r*0.8, r*0.6, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // Draw Center
+        ctx.fillStyle = this.colorState === 'fade' ? '#CCCCCC' : COLORS.center;
+        ctx.beginPath();
+        ctx.arc(0, 0, r*0.4, 0, Math.PI*2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+// --- Scene Management ---
+
+// Layout Helper: Define where the 7 groups go
+function calculateGroupPositions() {
+    groups = [];
+    // Layout: 4 on top row, 3 on bottom row (centered)
+    const marginX = width * 0.15;
+    const marginY = height * 0.25;
+    const availableW = width - marginX * 2;
+    
+    // Row 1
+    for(let i=0; i<4; i++) {
+        groups.push({
+            x: marginX + (availableW / 3) * i,
+            y: marginY
+        });
+    }
+    // Row 2
+    for(let i=0; i<3; i++) {
+        groups.push({
+            x: marginX + (availableW / 3) * (i + 0.5),
+            y: marginY + height * 0.35
+        });
+    }
+}
+
+// Layout Helper: Define where flowers go inside a group (3x3 grid)
+function getFlowerTargetPos(groupId, indexInGroup) {
+    const group = groups[groupId];
+    const spacing = 35 * scaleFactor;
+    
+    // 3x3 Grid logic
+    const row = Math.floor(indexInGroup / 3);
+    const col = indexInGroup % 3;
+    
+    // Center the 3x3 grid around the group point
+    const offsetX = (col - 1) * spacing;
+    const offsetY = (row - 1) * spacing;
+    
+    return {
+        x: group.x + offsetX,
+        y: group.y + offsetY
+    };
+}
+
+function init() {
+    resize();
+    calculateGroupPositions();
+    
+    // Create 63 flowers (7 groups * 9 flowers)
+    // Note: We create them but keep them hidden initially
+    for(let g=0; g<7; g++) {
+        for(let i=0; i<9; i++) {
+            flowers.push(new Flower(g, i));
+        }
+    }
+
+    requestAnimationFrame(loop);
+}
+
+// --- Timeline Script ---
+/*
+    Timeline:
+    0-4s: Intro text
+    4-10s: Show 1 group of 9. "Every pattern needs 9 pots."
+    10-16s: Show all 63 pots. "We need 63 pots total."
+    16-22s: Calculation 1. "How many patterns?" (63 / 9 = 7).
+    22-28s: The Problem. "Not enough flowers. Only 8 per pattern." (Fade out 9th).
+    28-34s: The Solution. "How many patterns? Still 7." (Highlight groups).
+    34-42s: Final Count. "Total pots? 7 * 8 = 56."
+*/
+
+const script = [
+    { t: 500,  cn: "学校计划摆放一些花卉图案", en: "The school plans to arrange some flower patterns." },
+    { t: 1000, action: "show_header" },
+    { t: 4000, cn: "每 9 盆花摆一个图案", en: "Every pattern is made of 9 potted flowers.", action: "show_one_group" },
+    { t: 9000, cn: "总共需要 63 盆花", en: "We need 63 pots in total to finish the plan.", action: "show_all" },
+    { t: 14000, cn: "那么，我们要摆几个图案呢？", en: "So, how many patterns are we making?", action: "calc_patterns" },
+    { t: 20000, cn: "可是，花盆的数量不够了...", en: "However, we don't have enough pots...", action: "problem_event" },
+    { t: 24000, cn: "只能用 8 盆摆一个图案", en: "We can only use 8 pots for each pattern now.", action: "change_rule" },
+    { t: 29000, cn: "要摆几个图案？依然是 7 个", en: "How many patterns? We still arrange 7 patterns.", action: "highlight_groups" },
+    { t: 34000, cn: "最后用了多少盆花？", en: "How many pots did we use in the end?", action: "final_calc" },
+    { t: 39000, cn: "7 个图案 × 8 盆 = 56 盆", en: "7 patterns × 8 pots = 56 pots.", action: "end_card" }
+];
+
+let currentStep = -1;
+
+function executeAction(action) {
+    if(action === "show_header") {
+        elHeader.classList.add('fade-in');
+        elSubBox.classList.add('fade-in');
+    }
+    else if(action === "show_one_group") {
+        // Show first group (index 0-8)
+        flowers.forEach(f => {
+            if(f.groupId === 0) {
+                const pos = getFlowerTargetPos(f.groupId, f.indexInGroup);
+                f.targetX = pos.x;
+                f.targetY = pos.y;
+                f.targetScale = 1;
+                f.targetOpacity = 1;
+                f.visible = true;
+            }
+        });
+    }
+    else if(action === "show_all") {
+        // Show remaining groups
+        flowers.forEach((f, idx) => {
+            const pos = getFlowerTargetPos(f.groupId, f.indexInGroup);
+            f.targetX = pos.x;
+            f.targetY = pos.y;
+            // Stagger animation slightly based on group
+            setTimeout(() => {
+                f.targetScale = 1;
+                f.targetOpacity = 1;
+                f.visible = true;
+            }, f.groupId * 100 + (f.indexInGroup * 20));
+        });
+    }
+    else if(action === "calc_patterns") {
+        // Show math card
+        elMathContent.innerText = "63 ÷ 9 = 7";
+        elMathLabel.innerText = "个图案 (Patterns)";
+        elMathCard.classList.add('pop-in');
+        
+        // Highlight groups visually (pulse scale)
+        flowers.forEach(f => {
+            f.targetScale = 0.9; // shrink slightly to show separation
+        });
+    }
+    else if(action === "problem_event") {
+        // Hide math card
+        elMathCard.classList.remove('pop-in');
+        
+        // Turn everything slightly grey or shake? Let's just reset scale
+        flowers.forEach(f => {
+            f.targetScale = 1;
+        });
+    }
+    else if(action === "change_rule") {
+        // The 9th flower in every group (index 8) fades out or turns grey then vanishes
+        flowers.forEach(f => {
+            if(f.indexInGroup === 8) { // The last one in 3x3 grid
+                f.colorState = 'fade';
+                setTimeout(() => {
+                    f.targetOpacity = 0;
+                    f.targetScale = 0;
+                }, 1000);
+            }
+        });
+    }
+    else if(action === "highlight_groups") {
+        // Re-emphasize the 7 groups. 
+        // We rearranged? No, just kept the 7 groups, but they are smaller now.
+        elMathContent.innerText = "7";
+        elMathLabel.innerText = "个图案 (Patterns)";
+        elMathCard.classList.add('pop-in');
+    }
+    else if(action === "final_calc") {
+        // Change math card
+        elMathCard.classList.remove('pop-in'); // Hide momentarily
+        setTimeout(() => {
+            elMathContent.innerText = "7 × 8 = 56";
+            elMathLabel.innerText = "盆花 (Total Pots)";
+            elMathCard.classList.add('pop-in');
+        }, 500);
+    }
+    else if(action === "end_card") {
+        // Nothing special, just let the text linger
+    }
+}
+
+function loop(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsed = timestamp - startTime;
+
+    // Update Progress Bar
+    const progress = Math.min(elapsed / totalDuration * 100, 100);
+    elProgress.style.width = `${progress}%`;
+
+    // Handle Timeline
+    for(let i = currentStep + 1; i < script.length; i++) {
+        if(elapsed >= script[i].t) {
+            currentStep = i;
+            const step = script[i];
+            
+            if(step.cn) {
+                elSubCN.innerText = step.cn;
+                elSubEN.innerText = step.en;
+                // Subtle animation for text change
+                elSubBox.style.transform = "translateY(0px) scale(1.02)";
+                setTimeout(() => elSubBox.style.transform = "translateY(0px) scale(1)", 200);
+            }
+            
+            if(step.action) {
+                executeAction(step.action);
+            }
+        }
+    }
+
+    // Clear Canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Background decoration (Optional subtle grid)
+    ctx.strokeStyle = 'rgba(0,0,0,0.03)';
+    ctx.lineWidth = 1;
+    const gridSize = 50 * scaleFactor;
+    /*
+    ctx.beginPath();
+    for(let x=0; x<width; x+=gridSize) { ctx.moveTo(x,0); ctx.lineTo(x,height); }
+    for(let y=0; y<height; y+=gridSize) { ctx.moveTo(0,y); ctx.lineTo(width,y); }
+    ctx.stroke();
+    */
+
+    // Draw Group Boxes (Subtle indication of patterns)
+    if(elapsed > 4000) {
+        ctx.strokeStyle = 'rgba(74, 74, 74, 0.1)';
+        ctx.lineWidth = 2 * scaleFactor;
+        ctx.setLineDash([5, 5]);
+        groups.forEach((g, idx) => {
+            // Only draw if we have "created" this group in timeline logic
+            // Simple check: if the first flower of this group is visible
+            const firstFlower = flowers.find(f => f.groupId === idx);
+            if(firstFlower && firstFlower.opacity > 0.5) {
+                const boxSize = 120 * scaleFactor;
+                ctx.beginPath();
+                ctx.roundRect(g.x - boxSize/2, g.y - boxSize/2, boxSize, boxSize, 10);
+                ctx.stroke();
+                
+                // Label the group number (Optional)
+                /*
+                ctx.fillStyle = 'rgba(74,74,74,0.2)';
+                ctx.font = `bold ${14*scaleFactor}px Nunito`;
+                ctx.textAlign = 'center';
+                ctx.fillText(`#${idx+1}`, g.x, g.y - boxSize/2 - 5);
+                */
+            }
+        });
+        ctx.setLineDash([]);
+    }
+
+    // Update and Draw Flowers
+    flowers.forEach(f => {
+        f.update();
+        f.draw(ctx);
+    });
+
+    if (elapsed < totalDuration + 2000) {
+        requestAnimationFrame(loop);
+    }
+}
+
+// Start automatically
+window.onload = init;
+
+</script>
+</body>
+</html>

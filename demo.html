@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>光合作用演示动画</title> <style> :root { --sky-color: #87CEEB; --ground-color: #8B4513; --leaf-color: #228B22; --sun-color: #FFD700; --text-color: #333; --accent-color: #ff6b6b; }body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  background-color: #f0f4f8;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 舞台容器 */
+#stage {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  height: 60vh;
+  background: linear-gradient(to bottom, var(--sky-color) 70%, var(--ground-color) 70%);
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* 进度条区域 */
+#header {
+  width: 100%;
+  max-width: 800px;
+  background: #fff;
+  padding: 10px 20px;
+  box-sizing: border-box;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+#title-bar {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--text-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#progress-bg {
+  width: 100%;
+  height: 6px;
+  background: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+#progress-bar {
+  width: 0%;
+  height: 100%;
+  background: var(--accent-color);
+  transition: width 0.5s ease;
+}
+
+/* 视觉元素容器 */
+#visual-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* 让鼠标穿透 */
+}
+
+/* 字幕区域 */
+#subtitle-container {
+  width: 100%;
+  max-width: 800px;
+  flex: 1;
+  background: #fff;
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  border-top: 1px solid #eee;
+  margin-top: -12px; /* 修正圆角连接 */
+  border-radius: 0 0 12px 12px;
+  position: relative;
+  z-index: 10;
+}
+
+#cn-text {
+  font-size: 20px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  min-height: 1.4em;
+}
+
+#en-text {
+  font-size: 14px;
+  color: #7f8c8d;
+  min-height: 1.2em;
+}
+
+/* 动画元素样式类 */
+.sun {
+  position: absolute;
+  top: -60px;
+  right: 50px;
+  width: 80px;
+  height: 80px;
+  background: var(--sun-color);
+  border-radius: 50%;
+  box-shadow: 0 0 40px var(--sun-color);
+  transition: top 1s ease-out, transform 2s linear;
+  z-index: 2;
+}
+
+.ray {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200%;
+  height: 2px;
+  background: rgba(255, 215, 0, 0.5);
+  transform-origin: 0 0;
+  opacity: 0;
+  transition: opacity 1s;
+}
+
+.plant-stem {
+  position: absolute;
+  bottom: 30%; /* Starting from ground line */
+  left: 50%;
+  width: 10px;
+  height: 0; /* Animated */
+  background: #4CAF50;
+  transform: translateX(-50%);
+  transition: height 1s ease-out;
+  z-index: 3;
+}
+
+.leaf {
+  position: absolute;
+  width: 0;
+  height: 0;
+  background: var(--leaf-color);
+  border-radius: 0 50% 0 50%;
+  transition: all 0.5s ease-out;
+  opacity: 0;
+}
+
+.leaf.left {
+  transform: rotate(-45deg);
+  left: -30px;
+  top: 20px;
+}
+
+.leaf.right {
+  transform: rotate(45deg);
+  left: 10px;
+  top: -10px;
+}
+
+/* 分子/粒子 */
+.molecule {
+  position: absolute;
+  font-size: 12px;
+  font-weight: bold;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  opacity: 0;
+  transition: all 1s ease;
+  z-index: 5;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.co2 { background: #95a5a6; } /* Grey */
+.h2o { background: #3498db; } /* Blue */
+.o2 { background: #e0f7fa; color: #00bcd4; border: 1px solid #00bcd4; } /* Light Blue */
+.sugar { background: #e67e22; border-radius: 4px; width: 40px; } /* Square-ish Orange */
+
+/* 放大镜效果 */
+.magnifier {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  width: 150px;
+  height: 150px;
+  border: 5px solid #333;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+
+.chloroplast {
+  width: 100px;
+  height: 60px;
+  background: #4CAF50;
+  border-radius: 30px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 12px;
+}
+
+/* 重新开始按钮 */
+#replay-btn {
+  padding: 8px 20px;
+  font-size: 16px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  display: none; /* 初始隐藏 */
+  margin-top: 10px;
+}
+
+#replay-btn:hover {
+  opacity: 0.9;
+}
+
+</style></head> <body><div id="header">
+  <div id="title-bar">
+      <span>📚 科学演示：光合作用</span>
+      <span style="font-size:12px; color:#999;">Interactive Visualization</span>
+  </div>
+  <div id="progress-bg">
+      <div id="progress-bar"></div>
+  </div>
+</div>
+
+<div id="stage">
+  <div id="visual-container">
+      <div class="sun" id="sun"></div>
+      <div class="plant-stem" id="stem">
+          <div class="leaf left" id="leaf-l"></div>
+          <div class="leaf right" id="leaf-r"></div>
+      </div>
+      <div class="magnifier" id="magnifier">
+          <div style="font-size:10px; color:#666; margin-bottom:5px;">叶绿体 (Chloroplast)</div>
+          <div class="chloroplast" id="chloroplast-inner">
+              <span id="chloro-text">工厂</span>
+          </div>
+      </div>
+  </div>
+</div>
+
+<div id="subtitle-container">
+  <div id="cn-text">准备开始...</div>
+  <div id="en-text">Ready...</div>
+  <button id="replay-btn" onclick="location.reload()">再看一遍</button>
+</div>
+
+<script>
+  // DOM Elements
+  const visualContainer = document.getElementById('visual-container');
+  const cnText = document.getElementById('cn-text');
+  const enText = document.getElementById('en-text');
+  const progressBar = document.getElementById('progress-bar');
+  const sun = document.getElementById('sun');
+  const stem = document.getElementById('stem');
+  const leafL = document.getElementById('leaf-l');
+  const leafR = document.getElementById('leaf-r');
+  const magnifier = document.getElementById('magnifier');
+  const replayBtn = document.getElementById('replay-btn');
+
+  // Helper: Create a molecule element
+  function createMolecule(type, text, x, y) {
+      const el = document.createElement('div');
+      el.className = `molecule ${type}`;
+      el.innerText = text;
+      el.style.left = x;
+      el.style.top = y;
+      visualContainer.appendChild(el);
+      return el;
+  }
+
+  // Timeline Configuration
+  const timeline = [
+      {
+          // Scene 0: Introduction
+          duration: 4000,
+          cn: "步骤 1：思考一下，植物不吃饭，为什么能长大？",
+          en: "Step 1: Plants don't eat food, so how do they grow?",
+          action: () => {
+              // Reset
+              stem.style.height = '0';
+              leafL.style.opacity = '0';
+              leafR.style.opacity = '0';
+              sun.style.top = '-80px';
+              magnifier.style.transform = 'translate(-50%, -50%) scale(0)';
+              
+              // Small growth animation
+              setTimeout(() => {
+                  stem.style.height = '150px';
+              }, 500);
+              setTimeout(() => {
+                  leafL.style.opacity = '1';
+                  leafL.style.width = '40px';
+                  leafL.style.height = '20px';
+                  leafR.style.opacity = '1';
+                  leafR.style.width = '40px';
+                  leafR.style.height = '20px';
+              }, 1500);
+          }
+      },
+      {
+          // Scene 1: Ingredients (Sunlight)
+          duration: 5000,
+          cn: "步骤 2：首先，植物需要一位大厨，那就是“太阳”。",
+          en: "Step 2: First, the plant needs a chef: The Sun.",
+          action: () => {
+              sun.style.top = '40px'; // Sun rises
+              // Add some rays effect (simplified by box-shadow in CSS, maybe pulse)
+              sun.style.transform = 'scale(1.1)';
+              setTimeout(() => sun.style.transform = 'scale(1)', 1000);
+          }
+      },
+      {
+          // Scene 2: Ingredients (Water & CO2)
+          duration: 6000,
+          cn: "步骤 3：接着准备食材。根部吸水(H₂O)，叶子吸二氧化碳(CO₂)。",
+          en: "Step 3: Ingredients: Roots drink Water, leaves breathe CO2.",
+          action: () => {
+              // Create Water moving up
+              for(let i=0; i<3; i++) {
+                  setTimeout(() => {
+                      let w = createMolecule('h2o', 'H₂O', '50%', '80%'); // Start at ground
+                      w.style.opacity = '1';
+                      setTimeout(() => w.style.top = '50%', 100); // Move up
+                  }, i * 800);
+              }
+
+              // Create CO2 moving from air
+              for(let i=0; i<3; i++) {
+                  setTimeout(() => {
+                      let c = createMolecule('co2', 'CO₂', '10%', '40%'); // Start in air
+                      c.style.opacity = '1';
+                      setTimeout(() => {
+                          c.style.left = '45%';
+                          c.style.top = '50%';
+                      }, 100);
+                  }, i * 800 + 400);
+              }
+          }
+      },
+      {
+          // Scene 3: The Factory (Magnifier)
+          duration: 5000,
+          cn: "步骤 4：进入叶子内部的工厂——叶绿体。",
+          en: "Step 4: Inside the leaf, there is a factory called the Chloroplast.",
+          action: () => {
+              magnifier.style.transform = 'translate(-50%, -50%) scale(1)';
+              
+              // Clear previous floating molecules to clean up view
+              const mols = document.querySelectorAll('.molecule');
+              mols.forEach(m => m.style.opacity = '0');
+          }
+      },
+      {
+          // Scene 4: The Reaction
+          duration: 6000,
+          cn: "步骤 5：加工时刻！光能把水和二氧化碳重组成养分。",
+          en: "Step 5: Processing! Light energy transforms them into food.",
+          action: () => {
+              // Animate inputs entering the magnifier
+              const h2o = createMolecule('h2o', 'H₂O', '20%', '50%'); // Relative to viewport, but we fake it
+              const co2 = createMolecule('co2', 'CO₂', '80%', '50%');
+              
+              h2o.style.zIndex = '25';
+              co2.style.zIndex = '25';
+              
+              // Position them near magnifier
+              h2o.style.top = '40%'; h2o.style.left = '40%'; h2o.style.opacity = '1';
+              co2.style.top = '40%'; co2.style.left = '60%'; co2.style.opacity = '1';
+
+              // Move into center
+              setTimeout(() => {
+                  h2o.style.left = '50%';
+                  co2.style.left = '50%';
+              }, 500);
+
+              // Flash effect inside chloroplast
+              setTimeout(() => {
+                  h2o.style.opacity = '0';
+                  co2.style.opacity = '0';
+                  document.getElementById('chloroplast-inner').style.backgroundColor = '#FFEB3B'; // Flash yellow
+                  document.getElementById('chloro-text').innerText = "加工中...";
+              }, 1500);
+              
+              setTimeout(() => {
+                  document.getElementById('chloroplast-inner').style.backgroundColor = '#4CAF50'; // Back to green
+                  document.getElementById('chloro-text').innerText = "完成!";
+              }, 2500);
+          }
+      },
+      {
+          // Scene 5: Output
+          duration: 6000,
+          cn: "步骤 6：最后，产出了糖分(能量)和氧气(O₂)。",
+          en: "Step 6: Output: Sugar (Energy) and Oxygen (O2).",
+          action: () => {
+              // Create products popping out
+              const sugar = createMolecule('sugar', '糖', '50%', '40%');
+              const o2 = createMolecule('o2', 'O₂', '50%', '40%');
+              sugar.style.zIndex = '25';
+              o2.style.zIndex = '25';
+              
+              sugar.style.opacity = '1';
+              o2.style.opacity = '1';
+
+              // Move them out
+              setTimeout(() => {
+                  sugar.style.top = '60%'; // Drops down (stored in plant)
+                  o2.style.top = '20%';    // Floats up (released)
+                  o2.style.left = '70%';
+              }, 100);
+          }
+      },
+      {
+          // Scene 6: Summary
+          duration: 5000,
+          cn: "总结：阳光 + 水 + CO₂ → 养分 + 氧气。这就是光合作用！",
+          en: "Summary: Light + Water + CO2 -> Food + Oxygen. That's Photosynthesis!",
+          action: () => {
+              magnifier.style.transform = 'translate(-50%, -50%) scale(0)'; // Hide magnifier
+              // Show equation on screen or just clean view
+              const equation = document.createElement('div');
+              equation.innerText = "阳光 + 水 + CO₂ \n↓\n 糖 + 氧气";
+              equation.style.position = 'absolute';
+              equation.style.top = '30%';
+              equation.style.left = '50%';
+              equation.style.transform = 'translateX(-50%)';
+              equation.style.background = 'rgba(255,255,255,0.8)';
+              equation.style.padding = '20px';
+              equation.style.borderRadius = '10px';
+              equation.style.textAlign = 'center';
+              equation.style.fontWeight = 'bold';
+              equation.style.color = '#333';
+              equation.style.opacity = '0';
+              equation.style.transition = 'opacity 1s';
+              visualContainer.appendChild(equation);
+              
+              setTimeout(() => equation.style.opacity = '1', 500);
+              
+              replayBtn.style.display = "inline-block";
+          }
+      }
+  ];
+
+  let currentSceneIndex = 0;
+
+  function playNextScene() {
+      if (currentSceneIndex >= timeline.length) return;
+
+      const scene = timeline[currentSceneIndex];
+      
+      // Update Text
+      cnText.innerText = scene.cn;
+      enText.innerText = scene.en;
+
+      // Update Progress Bar
+      const progressPercent = ((currentSceneIndex + 1) / timeline.length) * 100;
+      progressBar.style.width = `${progressPercent}%`;
+
+      // Execute Animation
+      scene.action();
+
+      // Schedule next scene
+      if (currentSceneIndex < timeline.length - 1) {
+          setTimeout(playNextScene, scene.duration);
+      }
+      
+      currentSceneIndex++;
+  }
+
+  // Start animation on load
+  window.onload = () => {
+      setTimeout(playNextScene, 1000); // Small delay before start
+  };
+
+</script></body> </html>
