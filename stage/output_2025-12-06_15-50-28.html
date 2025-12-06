@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thinky 数学动画：香包和纽扣问题</title>
+  <style>
+    :root {
+      --bg-color: #f0f2f5;
+      --container-bg: #ffffff;
+      --title-color: #333333;
+      --subtitle-color: #555555;
+      --card-bg: rgba(255, 255, 255, 0.9);
+      --card-border: #e0e0e0;
+      --progress-bg: #e9ecef;
+      --progress-fill: #007bff;
+      --subtitle-bg: rgba(30, 30, 30, 0.75);
+      --subtitle-text-color: #ffffff;
+      --blur-effect: saturate(180%) blur(10px);
+      
+      /* 教具颜色 */
+      --button-color: #ff85a2; /* 粉色纽扣 */
+      --button-border: #e66b8b;
+      --sachet-color: #a9d6e5; /* 浅蓝香包 */
+      --sachet-border: #89c2d9;
+      --highlight-color: #f7b801;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft Yahei", "Noto Sans SC", sans-serif;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #cinema-container {
+      width: 90vw;
+      max-width: 1280px;
+      aspect-ratio: 16 / 9;
+      background-color: var(--container-bg);
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #canvas {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .overlay-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      padding: 2.5%;
+      box-sizing: border-box;
+    }
+
+    .header {
+      text-align: center;
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .header.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .title {
+      font-size: 2.2vmin;
+      color: var(--title-color);
+      margin: 0;
+    }
+    .subtitle-topic {
+      font-size: 1.5vmin;
+      color: var(--subtitle-color);
+    }
+
+    .math-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      padding: 2vmin 3vmin;
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 15px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      backdrop-filter: var(--blur-effect);
+      opacity: 0;
+      transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      text-align: center;
+    }
+    .math-card.visible {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .math-text {
+      font-size: 3.5vmin;
+      font-weight: bold;
+      color: var(--title-color);
+    }
+    .math-sub {
+      font-size: 1.8vmin;
+      color: var(--subtitle-color);
+      margin-top: 0.5vmin;
+    }
+
+    .subtitle-box {
+      position: absolute;
+      bottom: 5%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      max-width: 900px;
+      padding: 1.2vmin 2.5vmin;
+      background: var(--subtitle-bg);
+      backdrop-filter: var(--blur-effect);
+      -webkit-backdrop-filter: var(--blur-effect);
+      border-radius: 15px;
+      text-align: center;
+      opacity: 0;
+      transform: translate(-50%, 20px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .subtitle-box.visible {
+        opacity: 1;
+        transform: translateX(-50%);
+    }
+    .subtitle-cn {
+      color: var(--subtitle-text-color);
+      font-size: 2.2vmin;
+      letter-spacing: 0.1em;
+      line-height: 1.6;
+    }
+    
+    .progress-container {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 5px;
+      background-color: var(--progress-bg);
+    }
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background-color: var(--progress-fill);
+      transition: width 0.1s linear;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="cinema-container">
+    <canvas id="canvas"></canvas>
+
+    <div class="overlay-layer">
+      <div class="header" id="header">
+        <h1 class="title">香包和纽扣问题</h1>
+        <span class="subtitle-topic">10 颗纽扣，每 2 颗做一个香包，能做几个？</span>
+      </div>
+
+      <div class="math-card" id="mathCard">
+        <div class="math-text" id="mathContent"></div>
+        <div class="math-sub" id="mathLabel"></div>
+      </div>
+
+      <div class="subtitle-box" id="subtitleBox">
+        <span class="subtitle-cn" id="subCN"></span>
+      </div>
+    </div>
+
+    <div class="progress-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </div>
+
+  <script>
+    // --- DOM Elements ---
+    const container = document.getElementById('cinema-container');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const header = document.getElementById('header');
+    const subtitleBox = document.getElementById('subtitleBox');
+    const subCN = document.getElementById('subCN');
+    const mathCard = document.getElementById('mathCard');
+    const mathContent = document.getElementById('mathContent');
+    const mathLabel = document.getElementById('mathLabel');
+    const progressBar = document.getElementById('progressBar');
+
+    // --- Animation & State ---
+    let startTime = null;
+    let currentStepIndex = -1;
+    let viewWidth, viewHeight;
+    const items = [];
+
+    // --- Script ---
+    const script = [
+      { t: 500,  cn: "小美要做香包，她一共有 10 颗漂亮的纽扣。", action: "intro_scene" },
+      { t: 4000, cn: "每个香包需要缝上 2 颗纽扣。", action: "show_rule" },
+      { t: 7000, cn: "我们来分组看看，这 10 颗纽扣能做成几个香包。", action: "start_grouping" },
+      { t: 9000, cn: "第一组，2 颗纽扣，做成了第 1 个香包。", action: "group_1" },
+      { t: 12000, cn: "第二组，又用掉 2 颗，做成了第 2 个香包。", action: "group_2" },
+      { t: 15000, cn: "第三组，这是第 3 个香包。", action: "group_3" },
+      { t: 18000, cn: "第四组，第 4 个香包也做好了。", action: "group_4" },
+      { t: 21000, cn: "第五组，我们做完了第 5 个香包。", action: "group_5" },
+      { t: 24000, cn: "现在，所有的纽扣都用完了。", action: "check_remainder" },
+      { t: 27000, cn: "10 颗纽扣，每 2 颗一组，正好分成了 5 组。", action: "show_equation_1" },
+      { t: 31000, cn: "所以，小美最多能做 5 个香包。", action: "show_result_1" },
+      { t: 34000, cn: "因为纽扣正好用完，所以没有剩下。", action: "show_result_2" },
+      { t: 37000, cn: "做完啦，一共 5 个香包，剩下 0 颗纽扣。", action: "conclusion" },
+    ];
+    const totalDuration = script[script.length - 1].t + 3000;
+
+    // --- Speech Synthesis ---
+    function speakText(text) {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+      const synth = window.speechSynthesis;
+      synth.cancel();
+      if (!text || !text.trim()) return;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'zh-CN';
+      utter.rate = 1.0;
+      utter.pitch = 1.1;
+      synth.speak(utter);
+    }
+    
+    // --- Canvas Drawing Classes ---
+    // Easing function
+    function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    class Button {
+        constructor(x, y, size) {
+            this.x = x; this.y = y;
+            this.tx = x; this.ty = y;
+            this.size = size;
+            this.opacity = 0;
+            this.scale = 0;
+            this.color = 'var(--button-color)';
+            this.borderColor = 'var(--button-border)';
+            this.isHighlighted = false;
+            this.isUsed = false;
+            
+            this.animStart = null;
+            this.animDuration = 800;
+            this.fromX = x; this.fromY = y;
+        }
+
+        moveTo(tx, ty, delay = 0) {
+            this.animStart = performance.now() + delay;
+            this.fromX = this.x;
+            this.fromY = this.y;
+            this.tx = tx;
+            this.ty = ty;
+        }
+
+        update(elapsed) {
+            this.opacity = Math.min(1, this.opacity + 0.05);
+            this.scale = Math.min(1, this.scale + 0.05);
+
+            if (this.animStart !== null) {
+                const animElapsed = elapsed - this.animStart;
+                if (animElapsed > 0) {
+                    let progress = Math.min(1, animElapsed / this.animDuration);
+                    progress = easeInOutCubic(progress);
+                    this.x = this.fromX + (this.tx - this.fromX) * progress;
+                    this.y = this.fromY + (this.ty - this.fromY) * progress;
+                    if (progress >= 1) {
+                        this.animStart = null;
+                    }
+                }
+            }
+        }
+        
+        draw(ctx) {
+            ctx.save();
+            ctx.globalAlpha = this.isUsed ? 0.3 : this.opacity;
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+
+            // Main body
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(this.color).trim();
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue(this.borderColor).trim();
+            ctx.lineWidth = this.size * 0.1;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Highlight
+            if(this.isHighlighted){
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--highlight-color').trim();
+                ctx.lineWidth = this.size * 0.15;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size * 1.2, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Holes
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(this.borderColor).trim();
+            const holeDist = this.size * 0.3;
+            ctx.beginPath();
+            ctx.arc(-holeDist, -holeDist, this.size * 0.1, 0, Math.PI * 2);
+            ctx.arc(holeDist, -holeDist, this.size * 0.1, 0, Math.PI * 2);
+            ctx.arc(-holeDist, holeDist, this.size * 0.1, 0, Math.PI * 2);
+            ctx.arc(holeDist, holeDist, this.size * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+    }
+
+    class Sachet {
+        constructor(x, y, size) {
+            this.x = x; this.y = y;
+            this.size = size;
+            this.opacity = 0;
+            this.scale = 0;
+            this.color = 'var(--sachet-color)';
+            this.borderColor = 'var(--sachet-border)';
+        }
+
+        update() {
+            if (this.opacity < 1) {
+              this.opacity = Math.min(1, this.opacity + 0.05);
+              this.scale = Math.min(1, this.scale + 0.05);
+            }
+        }
+
+        draw(ctx) {
+            ctx.save();
+            ctx.globalAlpha = this.opacity;
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+            
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(this.color).trim();
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue(this.borderColor).trim();
+            ctx.lineWidth = this.size * 0.08;
+
+            const w = this.size;
+            const h = this.size * 1.2;
+            
+            // Body
+            ctx.beginPath();
+            ctx.moveTo(-w/2, -h/2 + w*0.2);
+            ctx.quadraticCurveTo(0, -h/2, w/2, -h/2 + w*0.2);
+            ctx.lineTo(w/2, h/2 - w*0.2);
+            ctx.quadraticCurveTo(w/2 * 0.8, h/2, 0, h/2);
+            ctx.quadraticCurveTo(-w/2 * 0.8, h/2, -w/2, h/2 - w*0.2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Tie
+            ctx.beginPath();
+            ctx.moveTo(0, -h/2 + w*0.1);
+            ctx.bezierCurveTo(-w*0.3, -h/2 - w*0.2, w*0.3, -h/2 - w*0.2, 0, -h/2 + w*0.1);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+    }
+
+    // --- Action Handler ---
+    function executeAction(action) {
+        // Clear previous highlights
+        items.filter(it => it instanceof Button).forEach(b => b.isHighlighted = false);
+        mathCard.classList.remove('visible');
+
+        const buttonSize = viewWidth * 0.03;
+        const sachetSize = viewWidth * 0.05;
+
+        if (action === "intro_scene") {
+            header.classList.add('visible');
+            const totalButtons = 10;
+            const cols = 5;
+            const rows = 2;
+            const gridW = viewWidth * 0.6;
+            const gridH = viewHeight * 0.3;
+            const startX = viewWidth / 2 - gridW / 2;
+            const startY = viewHeight * 0.4 - gridH / 2;
+            const cellW = gridW / (cols - 1);
+            const cellH = gridH / (rows - 1);
+
+            for (let i = 0; i < totalButtons; i++) {
+                const r = Math.floor(i / cols);
+                const c = i % cols;
+                const x = startX + c * cellW;
+                const y = startY + r * cellH;
+                const button = new Button(x, y, buttonSize);
+                items.push(button);
+            }
+        }
+        
+        if (action === 'start_grouping') {
+            const buttons = items.filter(it => it instanceof Button);
+            const sachetAreaY = viewHeight * 0.7;
+            const sachetSpacing = viewWidth * 0.15;
+            const startX = viewWidth/2 - (5 - 1) * sachetSpacing / 2;
+
+            for(let i=0; i<5; i++){
+                const sachet = new Sachet(startX + i * sachetSpacing, sachetAreaY, sachetSize);
+                items.push(sachet);
+            }
+        }
+        
+        const groupActions = {
+            "group_1": 0, "group_2": 1, "group_3": 2, "group_4": 3, "group_5": 4
+        };
+
+        if (action in groupActions) {
+            const groupIndex = groupActions[action];
+            const buttons = items.filter(it => it instanceof Button);
+            const sachets = items.filter(it => it instanceof Sachet);
+
+            const b1 = buttons[groupIndex * 2];
+            const b2 = buttons[groupIndex * 2 + 1];
+            const targetSachet = sachets[groupIndex];
+
+            if (b1 && b2 && targetSachet) {
+                b1.isHighlighted = true;
+                b2.isHighlighted = true;
+                
+                setTimeout(() => {
+                    b1.moveTo(targetSachet.x - sachetSize * 0.2, targetSachet.y);
+                    b2.moveTo(targetSachet.x + sachetSize * 0.2, targetSachet.y);
+                    b1.isUsed = true;
+                    b2.isUsed = true;
+                    
+                    setTimeout(() => {
+                        targetSachet.opacity = 1;
+                        targetSachet.scale = 1;
+                        b1.opacity = 0;
+                        b2.opacity = 0;
+                    }, 800);
+                }, 500);
+            }
+        }
+
+        if (action === "show_equation_1") {
+            mathContent.textContent = "10 ÷ 2 = 5";
+            mathLabel.textContent = "10颗纽扣，每2颗一组，得到5组";
+            mathCard.classList.add('visible');
+        }
+
+        if (action === "show_result_1") {
+            mathContent.innerHTML = `可做 <span style="color: var(--sachet-border);">5</span> 个香包`;
+            mathLabel.textContent = "因为可以分成 5 组";
+            mathCard.classList.add('visible');
+        }
+
+        if (action === "show_result_2") {
+            mathContent.innerHTML = `剩下 <span style="color: var(--button-color);">0</span> 颗纽扣`;
+            mathLabel.textContent = "因为纽扣正好用完，没有剩余";
+            mathCard.classList.add('visible');
+        }
+        
+        if (action === "conclusion") {
+            // No new visual action, just summary text
+        }
+    }
+
+    // --- Main Loop ---
+    function loop(timestamp) {
+      if (!startTime) {
+        startTime = timestamp;
+      }
+      const elapsed = timestamp - startTime;
+
+      // --- Trigger Actions ---
+      while (currentStepIndex + 1 < script.length && elapsed >= script[currentStepIndex + 1].t) {
+        currentStepIndex++;
+        const step = script[currentStepIndex];
+        
+        subCN.textContent = step.cn;
+        subtitleBox.classList.remove('visible');
+        void subtitleBox.offsetWidth; // Trigger reflow
+        subtitleBox.classList.add('visible');
+        
+        speakText(step.cn);
+        executeAction(step.action);
+      }
+
+      // --- Update & Draw ---
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const dpr = window.devicePixelRatio || 1;
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      items.forEach(item => item.update(elapsed));
+      
+      // Draw from back to front
+      items.filter(item => item instanceof Sachet).forEach(item => item.draw(ctx));
+      items.filter(item => item instanceof Button).forEach(item => item.draw(ctx));
+      
+      // --- Progress Bar ---
+      const progress = Math.min(1, elapsed / totalDuration);
+      progressBar.style.width = `${progress * 100}%`;
+
+      if (elapsed < totalDuration) {
+        requestAnimationFrame(loop);
+      }
+    }
+
+    // --- Initialization ---
+    function resizeCanvas() {
+        const rect = container.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        
+        viewWidth = rect.width;
+        viewHeight = rect.height;
+
+        canvas.width = viewWidth * dpr;
+        canvas.height = viewHeight * dpr;
+        canvas.style.width = `${viewWidth}px`;
+        canvas.style.height = `${viewHeight}px`;
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before scaling
+        ctx.scale(dpr, dpr);
+    }
+    
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

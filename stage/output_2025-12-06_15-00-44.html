@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fogsight · 正方形队伍问题</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --container-bg: linear-gradient(135deg, #e6f0ff 0%, #f5f7fa 100%);
+            --title-color: #1a3a6e;
+            --subtitle-color: #5a78a5;
+            --text-color: #333;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --subtitle-bg: rgba(26, 58, 110, 0.85);
+            --subtitle-text-color: #ffffff;
+            --progress-bar-color: #4a90e2;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft Yahei", "Noto Sans SC", sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #cinema-container {
+            width: 100%;
+            max-width: 888px; /* 16:9 ratio for 500px height */
+            aspect-ratio: 16 / 9;
+            background: var(--container-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .overlay-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            width: 100%;
+            padding: 24px 32px;
+            box-sizing: border-box;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        
+        .header.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .title {
+            font-size: 28px;
+            color: var(--title-color);
+            margin: 0;
+        }
+
+        .subtitle-topic {
+            font-size: 16px;
+            color: var(--subtitle-color);
+            margin-top: 4px;
+        }
+
+        .math-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background-color: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 18px 24px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: auto;
+            text-align: center;
+        }
+
+        .math-card.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .math-text {
+            font-size: 24px;
+            font-weight: 500;
+            color: var(--title-color);
+            margin: 0;
+        }
+
+        .math-sub {
+            font-size: 14px;
+            color: var(--subtitle-color);
+            margin-top: 6px;
+        }
+
+        .subtitle-box {
+            position: absolute;
+            bottom: 25px;
+            max-width: 90%;
+            background-color: var(--subtitle-bg);
+            backdrop-filter: blur(8px);
+            color: var(--subtitle-text-color);
+            padding: 12px 24px;
+            border-radius: 16px;
+            font-size: 20px;
+            letter-spacing: 1px;
+            opacity: 0;
+            transform: translateY(10px) scale(0.95);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        .subtitle-box.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-bar {
+            width: 0;
+            height: 100%;
+            background-color: var(--progress-bar-color);
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+    <div id="cinema-container">
+        <canvas id="canvas"></canvas>
+        <div class="overlay-layer">
+            <div class="header" id="header">
+                <h1 class="title">计算体操方阵的总人数</h1>
+                <span class="subtitle-topic">一个6×6的正方形队伍加上2名领队</span>
+            </div>
+            <div class="math-card" id="mathCard">
+                <div class="math-text" id="mathContent"></div>
+                <div class="math-sub" id="mathLabel"></div>
+            </div>
+            <div class="subtitle-box" id="subtitleBox">
+                <span class="subtitle-cn" id="subCN"></span>
+            </div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const header = document.getElementById('header');
+        const subtitleBox = document.getElementById('subtitleBox');
+        const subCN = document.getElementById('subCN');
+        const mathCard = document.getElementById('mathCard');
+        const mathContent = document.getElementById('mathContent');
+        const mathLabel = document.getElementById('mathLabel');
+        const progressBar = document.getElementById('progressBar');
+        const cinemaContainer = document.getElementById('cinema-container');
+
+        // --- Canvas Setup ---
+        const dpr = window.devicePixelRatio || 1;
+        let canvasWidth, canvasHeight;
+
+        function resizeCanvas() {
+            const rect = cinemaContainer.getBoundingClientRect();
+            canvasWidth = rect.width;
+            canvasHeight = rect.height;
+            canvas.width = canvasWidth * dpr;
+            canvas.height = canvasHeight * dpr;
+            canvas.style.width = `${canvasWidth}px`;
+            canvas.style.height = `${canvasHeight}px`;
+            ctx.scale(dpr, dpr);
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- Easings ---
+        function easeOutCubic(t) {
+            return (--t) * t * t + 1;
+        }
+
+        // --- Speech Synthesis ---
+        function speakText(text) {
+            if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+            const synth = window.speechSynthesis;
+            synth.cancel();
+            if (!text || !text.trim()) return;
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'zh-CN';
+            utter.rate = 1.0;
+            utter.pitch = 1.0;
+            synth.speak(utter);
+        }
+        
+        // --- Entity Class: Student Icon ---
+        const studentColors = {
+            default: 'rgba(74, 144, 226, 0.8)',
+            highlight: 'rgba(245, 166, 35, 1)',
+            leader: 'rgba(208, 2, 27, 0.9)'
+        };
+
+        class Student {
+            constructor(x, y, radius = 10, color = studentColors.default) {
+                this.x = x; this.y = y; this.radius = radius; this.color = color;
+                this.targetX = x; this.targetY = y;
+                this.opacity = 0; this.targetOpacity = 0;
+                this.scale = 0; this.targetScale = 0;
+                this.targetColor = color;
+            }
+
+            update(t) {
+                this.x += (this.targetX - this.x) * t;
+                this.y += (this.targetY - this.y) * t;
+                this.opacity += (this.targetOpacity - this.opacity) * t;
+                this.scale += (this.targetScale - this.scale) * t;
+            }
+
+            draw(ctx) {
+                if (this.opacity < 0.01 || this.scale < 0.01) return;
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.translate(this.x, this.y);
+                ctx.scale(this.scale, this.scale);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+        
+        // --- Main Animation Logic ---
+        const students = [];
+        const ROWS = 6;
+        const COLS = 6;
+        const SPACING = 40;
+        const RADIUS = 12;
+
+        const totalWidth = (COLS - 1) * SPACING;
+        const totalHeight = (ROWS - 1) * SPACING;
+        const startX = (canvasWidth - totalWidth) / 2;
+        const startY = (canvasHeight - totalHeight) / 2 + 30; // Move down a bit
+
+        // Create student objects
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                students.push(new Student(
+                    startX + c * SPACING,
+                    startY + r * SPACING,
+                    RADIUS
+                ));
+            }
+        }
+        const leader1 = new Student(startX + totalWidth / 2 - SPACING, startY - 60, RADIUS, studentColors.leader);
+        const leader2 = new Student(startX + totalWidth / 2 + SPACING, startY - 60, RADIUS, studentColors.leader);
+        const allEntities = [...students, leader1, leader2];
+
+        // --- Timeline Script ---
+        const script = [
+            { t: 500,  cn: "我们来看一个关于排队的问题。", action: "intro" },
+            { t: 3000, cn: "题目说，同学们排成了每排6人的队伍。", action: "show_first_row" },
+            { t: 6000, cn: "这个队伍还是一个正方形，说明它有6排。", action: "show_full_squad" },
+            { t: 9000, cn: "所以，方阵里一共有 6 乘以 6，等于36人。", action: "show_squad_calc" },
+            { t: 13000, cn: "别忘了，方阵前面还有2名领队的同学。", action: "show_leaders" },
+            { t: 16000, cn: "现在，我们把方阵的36人和领队的2人加起来。", action: "prepare_total" },
+            { t: 19000, cn: "36加2等于38。", action: "show_total_calc" },
+            { t: 22000, cn: "所以，参加比赛的一共有38人。", action: "final_conclusion" }
+        ];
+        const totalDuration = script[script.length - 1].t + 3000;
+
+        function executeAction(action) {
+            mathCard.classList.remove('visible');
+
+            switch (action) {
+                case "intro":
+                    header.classList.add('visible');
+                    break;
+                
+                case "show_first_row":
+                    students.forEach((s, i) => {
+                        if (i < COLS) {
+                            s.targetOpacity = 1;
+                            s.targetScale = 1;
+                            s.color = studentColors.highlight;
+                        }
+                    });
+                    break;
+
+                case "show_full_squad":
+                    students.forEach(s => {
+                        s.targetOpacity = 1;
+                        s.targetScale = 1;
+                        s.color = studentColors.default;
+                    });
+                    break;
+
+                case "show_squad_calc":
+                    mathContent.textContent = "6 × 6 = 36 (人)";
+                    mathLabel.textContent = "体操方阵人数";
+                    mathCard.classList.add('visible');
+                    break;
+
+                case "show_leaders":
+                    leader1.targetOpacity = 1;
+                    leader1.targetScale = 1;
+                    leader2.targetOpacity = 1;
+                    leader2.targetScale = 1;
+                    break;
+
+                case "prepare_total":
+                    students.forEach(s => s.color = studentColors.default);
+                    leader1.color = studentColors.leader;
+                    leader2.color = studentColors.leader;
+                    break;
+                    
+                case "show_total_calc":
+                    mathContent.textContent = "36 + 2 = 38 (人)";
+                    mathLabel.textContent = "总人数";
+                    mathCard.classList.add('visible');
+                    break;
+
+                case "final_conclusion":
+                    students.forEach(s => s.color = studentColors.highlight);
+                    leader1.color = studentColors.highlight;
+                    leader2.color = studentColors.highlight;
+                    break;
+            }
+        }
+        
+        // --- Animation Loop ---
+        let startTime = null;
+        let currentStepIndex = -1;
+
+        function loop(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+
+            // --- Update script ---
+            const nextStepIndex = script.findIndex(step => step.t > elapsed);
+            const activeStepIndex = (nextStepIndex === -1 ? script.length : nextStepIndex) - 1;
+            
+            if (activeStepIndex > currentStepIndex) {
+                currentStepIndex = activeStepIndex;
+                const step = script[currentStepIndex];
+                if (step) {
+                    subCN.textContent = step.cn;
+                    subtitleBox.classList.add('visible');
+                    speakText(step.cn);
+                    executeAction(step.action);
+                }
+            }
+            if (elapsed > script[currentStepIndex].t + 2500) {
+                 subtitleBox.classList.remove('visible');
+            }
+
+
+            // --- Clear and draw ---
+            ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+            
+            allEntities.forEach(entity => {
+                entity.update(0.1);
+                entity.draw(ctx);
+            });
+
+            // --- Update progress bar ---
+            const progress = Math.min(elapsed / totalDuration, 1);
+            progressBar.style.width = `${progress * 100}%`;
+
+            if (elapsed < totalDuration) {
+                requestAnimationFrame(loop);
+            }
+        }
+
+        // Start the animation
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>

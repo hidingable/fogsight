@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fogsight · 网球装箱问题</title>
+  <style>
+    :root {
+      --bg-color: #f0f2f5;
+      --container-bg: #ffffff;
+      --text-color: #1f2329;
+      --subtitle-bg: rgba(20, 20, 20, 0.7);
+      --subtitle-text: #ffffff;
+      --accent-color: #86c06c;
+      --disabled-color: #cccccc;
+      --box-color: #f5d4a7;
+      --box-stroke: #d4a263;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft Yahei", "Noto Sans SC", sans-serif;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #cinema-container {
+      width: 90vw;
+      max-width: 1280px;
+      aspect-ratio: 16 / 9;
+      background-color: var(--container-bg);
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    #canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .overlay-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .header {
+      position: absolute;
+      top: 4%;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      color: var(--text-color);
+      width: 90%;
+    }
+    .title {
+      font-size: 1.8vw;
+      margin: 0;
+    }
+    .subtitle-topic {
+      font-size: 1.2vw;
+      opacity: 0.7;
+      margin-top: 0.5vh;
+    }
+    .math-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 2vh 3vw;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      opacity: 0;
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
+      pointer-events: none;
+    }
+    .math-text {
+      font-size: 2.2vw;
+      font-weight: bold;
+      color: var(--text-color);
+    }
+    .math-sub {
+      font-size: 1.2vw;
+      color: var(--text-color);
+      opacity: 0.6;
+      margin-top: 0.5vh;
+    }
+    .subtitle-box {
+      position: absolute;
+      bottom: 8%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--subtitle-bg);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 1.2vh 2.5vw;
+      max-width: 80%;
+      text-align: center;
+      transition: transform 0.2s ease-out;
+    }
+    .subtitle-cn {
+      font-size: 1.5vw;
+      color: var(--subtitle-text);
+      letter-spacing: 0.05em;
+    }
+    .progress-container {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 6px;
+        background-color: rgba(0, 0, 0, 0.1);
+    }
+    .progress-bar {
+        width: 0%;
+        height: 100%;
+        background-color: var(--accent-color);
+        border-radius: 0 3px 3px 0;
+        transition: width 0.1s linear;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="cinema-container">
+    <canvas id="canvas"></canvas>
+
+    <div class="overlay-layer">
+      <div class="header" id="header">
+        <h1 class="title">网球装箱问题</h1>
+        <span class="subtitle-topic">60 个网球，7 个盒子，每个装 8 个，能装下吗？</span>
+      </div>
+
+      <div class="math-card" id="mathCard">
+        <div class="math-text" id="mathContent"></div>
+        <div class="math-sub" id="mathLabel"></div>
+      </div>
+
+      <div class="subtitle-box" id="subtitleBox">
+        <span class="subtitle-cn" id="subCN"></span>
+      </div>
+    </div>
+    
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('cinema-container');
+    const subtitleBox = document.getElementById('subtitleBox');
+    const subCN = document.getElementById('subCN');
+    const mathCard = document.getElementById('mathCard');
+    const mathContent = document.getElementById('mathContent');
+    const mathLabel = document.getElementById('mathLabel');
+    const progressBar = document.getElementById('progressBar');
+
+    let balls = [];
+    let boxes = [];
+    let dpr = window.devicePixelRatio || 1;
+
+    function resizeCanvas() {
+        const rect = container.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+    }
+    
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    class Ball {
+        constructor(x, y, radius, color) {
+            this.x = x;
+            this.y = y;
+            this.ox = x; // original x
+            this.oy = y; // original y
+            this.tx = x; // target x
+            this.ty = y; // target y
+            this.radius = radius;
+            this.color = color;
+            this.opacity = 1;
+            this.scale = 1;
+            this.visible = false;
+        }
+
+        update(t) {
+            this.x += (this.tx - this.x) * t;
+            this.y += (this.ty - this.y) * t;
+        }
+
+        draw(ctx) {
+            if (!this.visible) return;
+            ctx.save();
+            ctx.globalAlpha = this.opacity;
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius * 0.7, -Math.PI/3, Math.PI/3);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = this.radius * 0.2;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+    }
+    
+    class Box {
+        constructor(x, y, width, height) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+            this.opacity = 0;
+            this.scale = 1;
+            this.ballsInside = 0;
+        }
+
+        getBallPosition(ballIndex, capacity) {
+            const cols = 4;
+            const row = Math.floor(ballIndex / cols);
+            const col = ballIndex % cols;
+            const padding = this.width * 0.1;
+            const cellW = (this.width - 2 * padding) / cols;
+            const cellH = (this.height - 2 * padding) / 2;
+            return {
+                x: this.x - this.width/2 + padding + col * cellW + cellW/2,
+                y: this.y - this.height/2 + padding + row * cellH + cellH/2,
+            };
+        }
+
+        draw(ctx) {
+            if (this.opacity <= 0) return;
+            ctx.save();
+            ctx.globalAlpha = this.opacity;
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+            ctx.strokeStyle = 'var(--box-stroke)';
+            ctx.fillStyle = 'var(--box-color)';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    function lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+
+    function speakText(text) {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+        const synth = window.speechSynthesis;
+        synth.cancel();
+        if (!text || !text.trim()) return;
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'zh-CN';
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+        synth.speak(utter);
+    }
+    
+    const script = [
+        { t: 500, cn: "我们来看一个问题：老师买了60个网球，准备用盒子装起来。", action: "intro_scene" },
+        { t: 5000, cn: "每个盒子能装8个网球。", action: "show_capacity" },
+        { t: 8000, cn: "现在有7个盒子，我们来看看，能不能装下这60个球呢？", action: "show_boxes" },
+        { t: 12000, cn: "我们先算一算，7个盒子一共能装多少个网球？", action: "prepare_calc" },
+        { t: 16000, cn: "每个盒子装8个，有7个盒子，就是7个8。", action: "show_calc_formula" },
+        { t: 19500, cn: "7乘以8，等于56。所以7个盒子最多能装56个网球。", action: "do_calc" },
+        { t: 25000, cn: "我们把球装进去看看。前7个盒子，一共装下了56个球。", action: "fill_boxes" },
+        { t: 30000, cn: "总共有60个球，但是盒子只能装56个。", action: "compare_counts" },
+        { t: 34000, cn: "因为60比56大，所以还有一些球装不下。", action: "show_comparison" },
+        { t: 38000, cn: "所以，7个盒子是装不下60个网球的。", action: "conclusion" },
+    ];
+    
+    const totalDuration = script[script.length - 1].t + 3000;
+    let startTime = null;
+    let currentStepIndex = -1;
+
+    function initScene() {
+        balls = [];
+        boxes = [];
+        const rect = container.getBoundingClientRect();
+        const viewWidth = rect.width;
+        const viewHeight = rect.height;
+
+        const totalBalls = 60;
+        const ballRadius = Math.min(viewWidth / 60, viewHeight / 40);
+
+        const cols = 15;
+        const rows = Math.ceil(totalBalls / cols);
+        const paddingX = viewWidth * 0.1;
+        const gridW = viewWidth - 2 * paddingX;
+        const spacingX = gridW / (cols - 1);
+        const startX = paddingX;
+        const startY = viewHeight * 0.2;
+        const spacingY = ballRadius * 2.5;
+
+        for (let i = 0; i < totalBalls; i++) {
+            const r = Math.floor(i / cols);
+            const c = i % cols;
+            balls.push(new Ball(startX + c * spacingX, startY + r * spacingY, ballRadius, 'var(--accent-color)'));
+        }
+        
+        const totalBoxes = 7;
+        const boxWidth = viewWidth * 0.1;
+        const boxHeight = boxWidth * 0.8;
+        const boxSpacing = viewWidth * 0.12;
+        const boxStartY = viewHeight * 0.7;
+        const boxStartX = viewWidth / 2 - (totalBoxes - 1) * boxSpacing / 2;
+        
+        for (let i = 0; i < totalBoxes; i++) {
+            boxes.push(new Box(boxStartX + i * boxSpacing, boxStartY, boxWidth, boxHeight));
+        }
+    }
+    
+    function executeAction(action) {
+        hideMathCard();
+
+        switch (action) {
+            case "intro_scene":
+                balls.forEach((ball, i) => {
+                    setTimeout(() => ball.visible = true, i * 20);
+                });
+                break;
+            case "show_capacity":
+                // This step is mainly for narration. Visuals come next.
+                break;
+            case "show_boxes":
+                boxes.forEach((box, i) => {
+                    setTimeout(() => box.opacity = 1, i * 100);
+                });
+                break;
+            case "prepare_calc":
+                // Highlight boxes
+                boxes.forEach(box => box.scale = 1.1);
+                setTimeout(() => boxes.forEach(box => box.scale = 1), 500);
+                break;
+            case "show_calc_formula":
+                showMathCard("7 个盒子 × 每盒 8 个", "总容量");
+                break;
+            case "do_calc":
+                showMathCard("7 × 8 = 56 (个)", "7个盒子总共能装");
+                break;
+            case "fill_boxes":
+                let ballIndex = 0;
+                for (let i = 0; i < 7; i++) { // 7 boxes
+                    for (let j = 0; j < 8; j++) { // 8 balls per box
+                        if(ballIndex < 56) {
+                            const ball = balls[ballIndex];
+                            const pos = boxes[i].getBallPosition(j, 8);
+                            ball.tx = pos.x;
+                            ball.ty = pos.y;
+                            ball.scale = 0.5;
+                            boxes[i].ballsInside++;
+                            ballIndex++;
+                        }
+                    }
+                }
+                break;
+            case "compare_counts":
+                 for (let i = 56; i < 60; i++) {
+                    balls[i].color = '#e74c3c';
+                    balls[i].scale = 1.3;
+                }
+                setTimeout(() => {
+                    for (let i = 56; i < 60; i++) balls[i].scale = 1;
+                }, 500);
+                break;
+            case "show_comparison":
+                showMathCard("60 > 56", "需要装的球 > 盒子总容量");
+                break;
+            case "conclusion":
+                const remainingBalls = balls.slice(56);
+                remainingBalls.forEach(ball => {
+                    ball.ty -= 30;
+                });
+                break;
+        }
+    }
+
+    function showMathCard(content, label) {
+        mathContent.textContent = content;
+        mathLabel.textContent = label;
+        mathCard.style.opacity = '1';
+        mathCard.style.transform = 'translate(-50%, -50%) scale(1)';
+    }
+
+    function hideMathCard() {
+        mathCard.style.opacity = '0';
+        mathCard.style.transform = 'translate(-50%, -50%) scale(0.8)';
+    }
+
+    function loop(timestamp) {
+        if (!startTime) {
+            startTime = timestamp;
+            initScene();
+        }
+        const elapsed = timestamp - startTime;
+
+        const nextStepIndex = script.findIndex(step => step.t > elapsed);
+        const currentScriptPos = (nextStepIndex === -1 ? script.length : nextStepIndex) - 1;
+
+        if (currentScriptPos > currentStepIndex) {
+            currentStepIndex = currentScriptPos;
+            const step = script[currentStepIndex];
+            subCN.textContent = step.cn;
+            speakText(step.cn);
+            executeAction(step.action);
+            subtitleBox.style.transform = 'translateX(-50%) scale(1.05)';
+            setTimeout(() => {
+                subtitleBox.style.transform = 'translateX(-50%) scale(1)';
+            }, 200);
+        }
+        
+        const rect = container.getBoundingClientRect();
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        
+        balls.forEach(ball => {
+            ball.update(0.1);
+            ball.draw(ctx);
+        });
+        
+        boxes.forEach(box => {
+            box.draw(ctx);
+        });
+        
+        const progress = Math.min(elapsed / totalDuration, 1);
+        progressBar.style.width = `${progress * 100}%`;
+
+        if (elapsed < totalDuration) {
+            requestAnimationFrame(loop);
+        }
+    }
+
+    requestAnimationFrame(loop);
+
+  </script>
+</body>
+</html>

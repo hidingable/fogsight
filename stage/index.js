@@ -81,7 +81,7 @@ async function runPipeline(userQuestion) {
 }
 
 // 你可以在这里改成真正的用户输入
-const userQuestion = "菲菲在商店买了 2 根跳绳和 1 个篮球，一共付了 50 元，售货员找给菲菲 1 元。如果买 1 个篮球的钱正好可以买 5 根跳绳，那么 1 根跳绳几元，1 个篮球几元";
+const userQuestion = "小美要做香包， 每个香包缝 2 颗纽扣。如果她有 10 颗纽扣， 最多能做几个香包？做完还剩几颗纽扣？";
 
 runPipeline(userQuestion).catch((err) => {
   console.error("流水线执行出错：", err);

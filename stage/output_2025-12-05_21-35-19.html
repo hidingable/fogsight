@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>方阵问题：体操队有多少人？</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #f0f4f8;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft Yahei", "Noto Sans SC", sans-serif;
+        }
+        #cinema-container {
+            width: 1280px;
+            height: 720px;
+            background: linear-gradient(135deg, #e0f7fa 0%, #d1e5f0 100%);
+            position: relative;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        #canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .overlay-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            text-align: center;
+            padding-top: 30px;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        .header.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .title {
+            font-size: 32px;
+            color: #1a237e;
+            margin: 0;
+        }
+        .subtitle-topic {
+            font-size: 18px;
+            color: #3f51b5;
+            margin-top: 5px;
+        }
+        .math-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 20px 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            pointer-events: all;
+        }
+        .math-card.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .math-text {
+            font-size: 48px;
+            color: #0d47a1;
+            font-weight: bold;
+        }
+        .math-sub {
+            font-size: 18px;
+            color: #1565c0;
+            margin-top: 5px;
+        }
+        .subtitle-box {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%) scale(0.95);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 12px 25px;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .subtitle-box.visible {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+        .subtitle-cn {
+            font-size: 24px;
+            color: #ffffff;
+            letter-spacing: 1.5px;
+        }
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: rgba(0, 0, 0, 0.1);
+        }
+        .progress-bar {
+            width: 0;
+            height: 100%;
+            background: #42a5f5;
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+    <div id="cinema-container">
+        <canvas id="canvas"></canvas>
+        <div class="overlay-layer">
+            <div class="header" id="header">
+                <h1 class="title">体操队人数计算</h1>
+                <span class="subtitle-topic">一个正方形方阵和两位领队一共有多少人？</span>
+            </div>
+            <div class="math-card" id="mathCard">
+                <div class="math-text" id="mathContent"></div>
+                <div class="math-sub" id="mathLabel"></div>
+            </div>
+            <div class="subtitle-box" id="subtitleBox">
+                <span class="subtitle-cn" id="subCN"></span>
+            </div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const header = document.getElementById('header');
+        const subtitleBox = document.getElementById('subtitleBox');
+        const subCN = document.getElementById('subCN');
+        const mathCard = document.getElementById('mathCard');
+        const mathContent = document.getElementById('mathContent');
+        const mathLabel = document.getElementById('mathLabel');
+        const progressBar = document.getElementById('progressBar');
+        const cinemaContainer = document.getElementById('cinema-container');
+
+        // --- Canvas Setup ---
+        const dpr = window.devicePixelRatio || 1;
+        const rect = cinemaContainer.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        // --- Animation Globals ---
+        let startTime = null;
+        let currentStepIndex = -1;
+        let people = [];
+
+        // --- Person Entity ---
+        class Person {
+            constructor(x, y, color = '#42a5f5', scale = 1, opacity = 1) {
+                this.baseX = x;
+                this.baseY = y;
+                this.x = x;
+                this.y = y;
+                this.targetX = x;
+                this.targetY = y;
+                this.color = color;
+                this.targetColor = color;
+                this.baseScale = scale;
+                this.scale = 0;
+                this.targetScale = scale;
+                this.opacity = 0;
+                this.targetOpacity = opacity;
+                this.visible = false;
+            }
+
+            // Draw a simple person icon
+            draw(ctx) {
+                if (!this.visible || this.opacity <= 0 || this.scale <= 0) return;
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.scale(this.scale, this.scale);
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = this.color;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 3;
+
+                // Head
+                ctx.beginPath();
+                ctx.arc(0, -15, 7, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Body
+                ctx.beginPath();
+                ctx.moveTo(0, -8);
+                ctx.lineTo(0, 8);
+                ctx.stroke();
+
+                // Arms
+                ctx.beginPath();
+                ctx.moveTo(-10, -2);
+                ctx.lineTo(0, 2);
+                ctx.lineTo(10, -2);
+                ctx.stroke();
+
+                // Legs
+                ctx.beginPath();
+                ctx.moveTo(0, 8);
+                ctx.lineTo(-8, 18);
+                ctx.moveTo(0, 8);
+                ctx.lineTo(8, 18);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            update(delta) {
+                const lerp = (a, b, t) => a + (b - a) * t;
+                const t = Math.min(1, delta * 0.005);
+                this.x = lerp(this.x, this.targetX, t);
+                this.y = lerp(this.y, this.targetY, t);
+                this.scale = lerp(this.scale, this.targetScale, t);
+                this.opacity = lerp(this.opacity, this.targetOpacity, t);
+            }
+
+            appear() {
+                this.visible = true;
+                this.scale = 0;
+                this.opacity = 0;
+                this.targetScale = this.baseScale;
+                this.targetOpacity = 1;
+            }
+            
+            disappear() {
+                this.targetScale = 0;
+                this.targetOpacity = 0;
+            }
+
+            moveTo(x, y) {
+                this.targetX = x;
+                this.targetY = y;
+            }
+        }
+        
+        // --- Timeline Script ---
+        const script = [
+            { t: 500,  cn: "我们来看一个关于排队的问题。", action: "intro_scene" },
+            { t: 3500, cn: "同学们排成一个正方形队伍，每排有6个人。", action: "show_squad" },
+            { t: 7000, cn: "因为是正方形，所以队伍有6排，每排6人。", action: "highlight_rows_cols" },
+            { t: 11000, cn: "方阵里一共有 6 乘以 6，等于36人。", action: "calc_squad" },
+            { t: 15000, cn: "接下来，题目说每个方阵前面还要有2名领队。", action: "show_leaders" },
+            { t: 19000, cn: "所以，总人数就是方阵的36人，加上2名领队。", action: "prepare_total" },
+            { t: 23000, cn: "36 加 2 等于 38。", action: "calc_total" },
+            { t: 26000, cn: "所以，一（1）班参加比赛的一共有38人。", action: "conclusion" }
+        ];
+        const totalDuration = script[script.length - 1].t + 3000;
+
+        // --- Action Executor ---
+        function executeAction(action) {
+            mathCard.classList.remove('visible');
+
+            if (action === "intro_scene") {
+                header.classList.add('visible');
+            }
+            
+            if (action === "show_squad") {
+                people = [];
+                const rows = 6;
+                const cols = 6;
+                const spacing = 70;
+                const startX = (rect.width - (cols - 1) * spacing) / 2;
+                const startY = (rect.height - (rows - 1) * spacing) / 2 + 50;
+
+                for (let i = 0; i < rows; i++) {
+                    for (let j = 0; j < cols; j++) {
+                        const person = new Person(startX + j * spacing, startY + i * spacing);
+                        person.appear();
+                        people.push(person);
+                    }
+                }
+            }
+            
+            if (action === 'highlight_rows_cols') {
+                // This will be handled in the draw loop for a brief moment
+                // Or simply relies on the voiceover to guide the user's eye
+            }
+            
+            if (action === "calc_squad") {
+                mathContent.textContent = "6 × 6 = 36";
+                mathLabel.textContent = "方阵人数";
+                mathCard.classList.add('visible');
+            }
+
+            if (action === "show_leaders") {
+                const spacing = 70;
+                const leaderY = (rect.height - (6 - 1) * spacing) / 2 + 50 - 100;
+                const leaderX1 = rect.width / 2 - 40;
+                const leaderX2 = rect.width / 2 + 40;
+                
+                const leader1 = new Person(leaderX1, leaderY, '#ff7043');
+                const leader2 = new Person(leaderX2, leaderY, '#ff7043');
+                leader1.appear();
+                leader2.appear();
+                people.push(leader1, leader2);
+            }
+
+            if (action === "prepare_total") {
+                 people.forEach(p => p.targetColor = p.color); // Reset just in case
+            }
+            
+            if (action === "calc_total") {
+                mathContent.textContent = "36 + 2 = 38";
+                mathLabel.textContent = "总人数";
+                mathCard.classList.add('visible');
+            }
+            
+            if (action === "conclusion") {
+                 mathContent.textContent = "38人";
+                 mathLabel.textContent = "最终答案";
+                 mathCard.classList.add('visible');
+            }
+        }
+        
+        // --- Speech Synthesis ---
+        function speakText(text) {
+            if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+            const synth = window.speechSynthesis;
+            synth.cancel(); 
+            if (!text || !text.trim()) return;
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'zh-CN';
+            utter.rate = 1.0;
+            utter.pitch = 1.0;
+            synth.speak(utter);
+        }
+
+        // --- Main Loop ---
+        function loop(timestamp) {
+            if (!startTime) {
+                startTime = timestamp;
+            }
+            const elapsed = timestamp - startTime;
+
+            // --- Update script ---
+            const nextStepIndex = script.findIndex(step => step.t > elapsed);
+            const newStepsToExecute = (nextStepIndex === -1) 
+                ? script.slice(currentStepIndex + 1) 
+                : script.slice(currentStepIndex + 1, nextStepIndex);
+
+            if (newStepsToExecute.length > 0) {
+                const lastStep = newStepsToExecute[newStepsToExecute.length - 1];
+                currentStepIndex += newStepsToExecute.length;
+                
+                subtitleBox.classList.remove('visible');
+                setTimeout(() => {
+                    subCN.textContent = lastStep.cn;
+                    subtitleBox.classList.add('visible');
+                    speakText(lastStep.cn);
+                    executeAction(lastStep.action);
+                }, 150); // slight delay for transition
+            }
+            
+            // --- Clear and Draw ---
+            ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+            
+            // --- Update and Draw entities ---
+            const delta = 16.67; // Assume 60fps
+            people.forEach(person => {
+                person.update(delta);
+                person.draw(ctx);
+            });
+            
+            // --- Update Progress Bar ---
+            progressBar.style.width = `${(elapsed / totalDuration) * 100}%`;
+
+            if (elapsed < totalDuration) {
+                requestAnimationFrame(loop);
+            } else {
+                 progressBar.style.width = '100%';
+            }
+        }
+
+        // Start the animation
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>

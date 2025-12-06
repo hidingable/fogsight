@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fogsight · 光合作用动画</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --container-bg: linear-gradient(135deg, #a8e0ff 0%, #d5e9f5 100%);
+            --text-color: #1a202c;
+            --subtitle-bg: rgba(26, 32, 44, 0.7);
+            --subtitle-text-color: #ffffff;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --progress-bg: rgba(255, 255, 255, 0.3);
+            --progress-fill: #ffffff;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft Yahei", "Noto Sans SC", sans-serif;
+            color: var(--text-color);
+            overflow: hidden;
+        }
+        #cinema-container {
+            width: 90vw;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+            background: var(--container-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .overlay-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .header {
+            padding: 2.5% 4%;
+            text-align: left;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        .header.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .title {
+            font-size: clamp(1.2rem, 3vw, 2rem);
+            margin: 0;
+            font-weight: 600;
+        }
+        .subtitle-topic {
+            font-size: clamp(0.8rem, 1.8vw, 1.1rem);
+            margin-top: 5px;
+            display: block;
+            font-weight: 400;
+            opacity: 0.8;
+        }
+        .math-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background-color: var(--card-bg);
+            border-radius: 15px;
+            padding: 20px 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .math-card.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .math-text {
+            font-size: clamp(1.1rem, 2.5vw, 1.8rem);
+            font-weight: 500;
+            text-align: center;
+        }
+        .math-sub {
+            font-size: clamp(0.75rem, 1.5vw, 1rem);
+            margin-top: 8px;
+            opacity: 0.7;
+            text-align: center;
+        }
+        .subtitle-box {
+            align-self: center;
+            margin-bottom: 3%;
+            background-color: var(--subtitle-bg);
+            color: var(--subtitle-text-color);
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: clamp(0.9rem, 2vw, 1.3rem);
+            letter-spacing: 1px;
+            backdrop-filter: blur(8px);
+            max-width: 80%;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .subtitle-box.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background-color: var(--progress-bg);
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--progress-fill);
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+
+<div id="cinema-container">
+    <canvas id="canvas"></canvas>
+    <div class="overlay-layer">
+        <div class="header" id="header">
+            <h1 class="title">神奇的“食物”制造工厂</h1>
+            <span class="subtitle-topic">一分钟了解什么是光合作用</span>
+        </div>
+        <div class="math-card" id="mathCard">
+            <div class="math-text" id="mathContent"></div>
+            <div class="math-sub" id="mathLabel"></div>
+        </div>
+        <div class="subtitle-box" id="subtitleBox">
+            <span class="subtitle-cn" id="subCN"></span>
+        </div>
+    </div>
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+</div>
+
+<script>
+    // --- UTILITIES ---
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+    const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    // --- DOM ELEMENTS ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const header = document.getElementById('header');
+    const subtitleBox = document.getElementById('subtitleBox');
+    const subCN = document.getElementById('subCN');
+    const mathCard = document.getElementById('mathCard');
+    const mathContent = document.getElementById('mathContent');
+    const mathLabel = document.getElementById('mathLabel');
+    const progressBar = document.getElementById('progressBar');
+    const cinemaContainer = document.getElementById('cinema-container');
+
+    // --- CANVAS SETUP ---
+    let width, height, dpr;
+    function setupCanvas() {
+        const rect = cinemaContainer.getBoundingClientRect();
+        dpr = window.devicePixelRatio || 1;
+        width = rect.width;
+        height = rect.height;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.scale(dpr, dpr);
+    }
+    setupCanvas();
+    window.addEventListener('resize', setupCanvas);
+
+    // --- SPEECH SYNTHESIS ---
+    function speakText(text) {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+        const synth = window.speechSynthesis;
+        synth.cancel();
+        if (!text || !text.trim()) return;
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'zh-CN';
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+        synth.speak(utter);
+    }
+
+    // --- ANIMATION ENTITIES ---
+    class Entity {
+        constructor({ x, y, targetX, targetY, scale = 1, opacity = 1, visible = true }) {
+            this.x = x;
+            this.y = y;
+            this.targetX = targetX ?? x;
+            this.targetY = targetY ?? y;
+            this.scale = scale;
+            this.targetScale = scale;
+            this.opacity = opacity;
+            this.targetOpacity = opacity;
+            this.visible = visible;
+        }
+
+        update() {
+            if (!this.visible) return;
+            const speed = 0.05;
+            this.x = lerp(this.x, this.targetX, speed);
+            this.y = lerp(this.y, this.targetY, speed);
+            this.scale = lerp(this.scale, this.targetScale, speed);
+            this.opacity = lerp(this.opacity, this.targetOpacity, speed);
+        }
+
+        draw(ctx) {
+            if (!this.visible || this.opacity < 0.01) return;
+        }
+    }
+
+    class Sun extends Entity {
+        draw(ctx) {
+            super.draw(ctx);
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+            ctx.globalAlpha = this.opacity;
+            // Sun body
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(0, 0, 40, 0, Math.PI * 2);
+            ctx.fill();
+            // Rays
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 4;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(angle) * 45, Math.sin(angle) * 45);
+                ctx.lineTo(Math.cos(angle) * 60, Math.sin(angle) * 60);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+
+    class Plant extends Entity {
+        constructor(props) {
+            super(props);
+            this.growth = 0;
+            this.targetGrowth = 0;
+        }
+        update() {
+            super.update();
+            this.growth = lerp(this.growth, this.targetGrowth, 0.03);
+        }
+        draw(ctx) {
+            super.draw(ctx);
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+            ctx.globalAlpha = this.opacity;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            // Pot
+            ctx.fillStyle = '#D2B48C';
+            ctx.beginPath();
+            ctx.moveTo(-35, 50);
+            ctx.lineTo(35, 50);
+            ctx.lineTo(25, 80);
+            ctx.lineTo(-25, 80);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(-30, 45, 60, 10);
+            
+            const h = 50 + this.growth * 80;
+            // Stem
+            ctx.strokeStyle = '#228B22';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(0, 45);
+            ctx.lineTo(0, 45 - h);
+            ctx.stroke();
+            
+            // Leaves
+            ctx.fillStyle = '#3CB371';
+            const drawLeaf = (baseX, baseY, size, angle) => {
+                ctx.save();
+                ctx.translate(baseX, baseY);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.ellipse(size * 0.7, 0, size, size * 0.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            };
+            if (this.growth > 0.1) drawLeaf(0, 30 - h*0.2, 20 + this.growth * 5, -Math.PI / 4);
+            if (this.growth > 0.2) drawLeaf(0, 30 - h*0.2, 20 + this.growth * 5, Math.PI / 4);
+            if (this.growth > 0.4) drawLeaf(0, 45 - h*0.6, 25 + this.growth * 10, -Math.PI / 5);
+            if (this.growth > 0.5) drawLeaf(0, 45 - h*0.6, 25 + this.growth * 10, Math.PI / 5);
+            if (this.growth > 0.8) drawLeaf(0, 45 - h, 30, 0); // Top leaf
+            ctx.restore();
+        }
+    }
+    
+    class Particle extends Entity {
+        constructor({ type, ...props }) {
+            super(props);
+            this.type = type; // 'h2o', 'co2', 'o2', 'glucose'
+        }
+        draw(ctx) {
+            super.draw(ctx);
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.scale(this.scale, this.scale);
+            ctx.globalAlpha = this.opacity;
+
+            if (this.type === 'h2o') {
+                ctx.fillStyle = '#87CEEB';
+                ctx.beginPath();
+                ctx.moveTo(0, -10);
+                ctx.arc(0, 0, 8, Math.PI, 0);
+                ctx.closePath();
+                ctx.fill();
+            } else if (this.type === 'co2') {
+                ctx.fillStyle = '#708090';
+                ctx.beginPath();
+                ctx.arc(0, 0, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#A9A9A9';
+                ctx.beginPath();
+                ctx.arc(-12, 0, 4, 0, Math.PI * 2);
+                ctx.arc(12, 0, 4, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (this.type === 'o2') {
+                ctx.fillStyle = '#ADD8E6';
+                ctx.beginPath();
+                ctx.arc(-5, 0, 5, 0, Math.PI * 2);
+                ctx.arc(5, 0, 5, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (this.type === 'glucose') {
+                ctx.fillStyle = '#FFB6C1';
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#FF69B4';
+                const s = 8;
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i/6) * Math.PI * 2;
+                    ctx.lineTo(Math.cos(angle) * s, Math.sin(angle) * s);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+
+    // --- SCENE MANAGEMENT ---
+    const sun = new Sun({ x: width * 0.15, y: -100, targetY: height * 0.2, scale: 0.8, opacity: 0 });
+    const plant = new Plant({ x: width / 2, y: height * 0.7, scale: 0.9, opacity: 0 });
+    plant.targetGrowth = 0.2; // Initial small plant
+
+    const particles = [];
+
+    function createParticles(count, type, startX, startY, endX, endY) {
+        for(let i = 0; i < count; i++) {
+            const p = new Particle({
+                type,
+                x: startX + (Math.random() - 0.5) * 100,
+                y: startY + (Math.random() - 0.5) * 100,
+                opacity: 0,
+            });
+            p.targetX = endX + (Math.random() - 0.5) * 50;
+            p.targetY = endY + (Math.random() - 0.5) * 50;
+            p.targetOpacity = 1;
+            particles.push(p);
+        }
+    }
+
+    // --- SCRIPT & TIMELINE ---
+    const script = [
+        { t: 500,  cn: "你好，今天我们来聊聊什么是光合作用。", action: 'intro' },
+        { t: 4500, cn: "简单来说，它就像是植物给自己做饭的过程。", action: 'show_plant_sun' },
+        { t: 9000, cn: "首先，植物需要两种原料：水和二氧化碳。", action: 'show_ingredients_label' },
+        { t: 13500, cn: "它会用根从土壤里吸收水分。", action: 'absorb_h2o' },
+        { t: 18000, cn: "同时，从空气中获取二氧化碳。", action: 'absorb_co2' },
+        { t: 22500, cn: "有了原料还不够，还需要能量，这份能量来自太阳光。", action: 'shine_sun' },
+        { t: 28000, cn: "当阳光照射到叶子上，神奇的化学反应就开始了。", action: 'reaction_start' },
+        { t: 34000, cn: "光合作用会产生两种东西：氧气和葡萄糖。", action: 'show_products_label' },
+        { t: 39000, cn: "氧气会被释放到空气中，供我们呼吸。", action: 'release_o2' },
+        { t: 44000, cn: "而葡萄糖作为养分，会留下来，支持植物自己生长。", action: 'use_glucose' },
+        { t: 50000, cn: "总结一下，光合作用就是植物利用光能，把水和二氧化碳变成养分和氧气的过程。", action: 'show_summary' },
+        { t: 58000, cn: "它不仅养活了植物自己，也为地球上的大部分生命提供了食物和氧气。", action: null },
+    ];
+    const totalDuration = script[script.length - 1].t + 4000;
+
+    function executeAction(action) {
+        mathCard.classList.remove('visible');
+
+        switch (action) {
+            case 'intro':
+                header.classList.add('visible');
+                break;
+            case 'show_plant_sun':
+                sun.targetOpacity = 1;
+                plant.targetOpacity = 1;
+                break;
+            case 'show_ingredients_label':
+                mathContent.innerHTML = '原料：水 + 二氧化碳';
+                mathLabel.textContent = 'Ingredients: H₂O + CO₂';
+                mathCard.classList.add('visible');
+                break;
+            case 'absorb_h2o':
+                createParticles(5, 'h2o', width/2, height*0.9, width/2, height*0.7);
+                break;
+            case 'absorb_co2':
+                 createParticles(5, 'co2', width*0.8, height*0.5, width/2, height*0.5);
+                break;
+            case 'shine_sun':
+                sun.targetScale = 1.0;
+                // particles will be absorbed in the main loop
+                break;
+            case 'reaction_start':
+                // Absorb incoming particles
+                particles.forEach(p => {
+                    if (p.type === 'h2o' || p.type === 'co2') {
+                        p.targetX = plant.x;
+                        p.targetY = plant.y - 100;
+                        p.targetOpacity = 0;
+                        p.targetScale = 0.2;
+                    }
+                });
+                break;
+            case 'show_products_label':
+                mathContent.innerHTML = '产物：氧气 + 葡萄糖';
+                mathLabel.textContent = 'Products: O₂ + Glucose';
+                mathCard.classList.add('visible');
+                break;
+            case 'release_o2':
+                createParticles(5, 'o2', plant.x, plant.y-100, plant.x + 150, plant.y - 200);
+                break;
+            case 'use_glucose':
+                createParticles(5, 'glucose', plant.x, plant.y-100, plant.x, plant.y - 150);
+                plant.targetGrowth = 1.0;
+                break;
+            case 'show_summary':
+                mathContent.innerHTML = '水 + 二氧化碳  <span style="font-size:0.8em; vertical-align:middle;">xrightarrow{光}</span>  氧气 + 葡萄糖';
+                mathLabel.textContent = 'Photosynthesis Equation';
+                mathCard.classList.add('visible');
+                particles.forEach(p => p.targetOpacity = 0);
+                break;
+        }
+    }
+
+    // --- MAIN LOOP ---
+    let startTime = null;
+    let currentStepIndex = -1;
+
+    function loop(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+
+        // --- Handle Script ---
+        const nextStepIndex = script.findIndex(step => step.t > elapsed);
+        const newStepsToExecute = (nextStepIndex === -1 ? script.length : nextStepIndex) - currentStepIndex - 1;
+
+        if (newStepsToExecute > 0) {
+            for (let i = 1; i <= newStepsToExecute; i++) {
+                const stepIndex = currentStepIndex + i;
+                if (stepIndex < script.length) {
+                    const step = script[stepIndex];
+                    subCN.textContent = step.cn;
+                    subtitleBox.classList.remove('visible');
+                    // Force reflow to restart animation
+                    void subtitleBox.offsetWidth;
+                    subtitleBox.classList.add('visible');
+                    speakText(step.cn);
+                    if (step.action) {
+                        executeAction(step.action);
+                    }
+                }
+            }
+            currentStepIndex += newStepsToExecute;
+        }
+
+        // --- Clear & Draw ---
+        ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+
+        // Draw ground
+        ctx.fillStyle = '#90EE90';
+        ctx.fillRect(0, height * 0.8, width, height * 0.2);
+
+        // --- Update and Draw Entities ---
+        sun.update();
+        sun.draw(ctx);
+
+        plant.update();
+        plant.draw(ctx);
+
+        particles.forEach(p => {
+            p.update();
+            p.draw(ctx);
+        });
+        
+        // Remove invisible particles
+        for(let i = particles.length - 1; i >= 0; i--) {
+            if(particles[i].opacity < 0.01 && particles[i].targetOpacity < 0.01) {
+                particles.splice(i, 1);
+            }
+        }
+
+        // --- Update Progress Bar ---
+        const progress = Math.min(elapsed / totalDuration, 1);
+        progressBar.style.width = `${progress * 100}%`;
+
+        if (elapsed < totalDuration) {
+            requestAnimationFrame(loop);
+        } else {
+             // Keep the last frame visible
+            subtitleBox.classList.remove('visible');
+        }
+    }
+
+    // --- START ---
+    requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>方阵与领队问题</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --container-bg: #ffffff;
+            --text-color: #333;
+            --subtitle-bg: rgba(0, 0, 0, 0.6);
+            --subtitle-text: #fff;
+            --progress-bar-bg: #e0e0e0;
+            --progress-bar-fill: #4CAF50;
+            --accent-color: #ffc107;
+            --shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            --border-radius: 16px;
+        }
+        body {
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft Yahei", "Noto Sans SC", sans-serif;
+            box-sizing: border-box;
+        }
+        #cinema-container {
+            width: 100%;
+            max-width: 888px; /* 16:9 ratio */
+            aspect-ratio: 16 / 9;
+            position: relative;
+            background-color: var(--container-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .overlay-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+        }
+        .header {
+            padding: 1.5rem 2rem;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+        .title {
+            font-size: 1.5rem;
+            margin: 0;
+            color: var(--text-color);
+        }
+        .subtitle-topic {
+            font-size: 1rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+        .math-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease, visibility 0s 0.4s;
+        }
+        .math-card.visible {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+            visibility: visible;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease, visibility 0s;
+        }
+        .math-text {
+            font-size: 1.75rem;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+        .math-sub {
+            font-size: 1rem;
+            color: #555;
+            margin-top: 0.5rem;
+        }
+        .subtitle-box {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--subtitle-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 0.75rem 1.5rem;
+            border-radius: 2rem;
+            max-width: 90%;
+            opacity: 0;
+            transform: translate(-50%, 10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .subtitle-box.visible {
+            opacity: 1;
+            transform: translateX(-50%);
+        }
+        .subtitle-cn {
+            font-size: 1.1rem;
+            color: var(--subtitle-text);
+            letter-spacing: 0.05em;
+            text-align: center;
+        }
+        .progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background-color: var(--progress-bar-bg);
+        }
+        .progress-bar {
+            width: 0;
+            height: 100%;
+            background-color: var(--progress-bar-fill);
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+
+<div id="cinema-container">
+    <canvas id="canvas"></canvas>
+    <div class="overlay-layer">
+        <div class="header" id="header">
+            <h1 class="title">方阵与领队问题</h1>
+            <span class="subtitle-topic">计算正方形队伍和领队的总人数</span>
+        </div>
+        <div class="math-card" id="mathCard">
+            <div class="math-text" id="mathContent"></div>
+            <div class="math-sub" id="mathLabel"></div>
+        </div>
+        <div class="subtitle-box" id="subtitleBox">
+            <span class="subtitle-cn" id="subCN"></span>
+        </div>
+    </div>
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const subtitleBox = document.getElementById('subtitleBox');
+    const subCN = document.getElementById('subCN');
+    const mathCard = document.getElementById('mathCard');
+    const mathContent = document.getElementById('mathContent');
+    const mathLabel = document.getElementById('mathLabel');
+    const progressBar = document.getElementById('progressBar');
+    const header = document.getElementById('header');
+
+    // --- High-res Canvas Setup ---
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const canvasWidth = rect.width;
+    const canvasHeight = rect.height;
+
+    // --- Animation Entities ---
+    let students = [];
+    let leaders = [];
+    const studentSize = 12;
+    const studentColor = '#ffc107'; // Yellow
+    const leaderColor = '#f44336'; // Red
+
+    class Person {
+        constructor(x, y, size, color) {
+            this.targetX = x;
+            this.targetY = y;
+            this.x = x;
+            this.y = y - 50; // Start from above
+            this.size = size;
+            this.color = color;
+            this.opacity = 0;
+            this.scale = 0;
+        }
+
+        update(dt) {
+            this.x += (this.targetX - this.x) * 0.1;
+            this.y += (this.targetY - this.y) * 0.1;
+            this.opacity += (1 - this.opacity) * 0.1;
+            this.scale += (1 - this.scale) * 0.1;
+        }
+
+        draw(context) {
+            if (this.opacity < 0.01) return;
+            context.save();
+            context.globalAlpha = this.opacity;
+            context.translate(this.x, this.y);
+            context.scale(this.scale, this.scale);
+            context.fillStyle = this.color;
+            context.beginPath();
+            context.arc(0, -this.size * 0.4, this.size * 0.4, 0, Math.PI * 2); // Head
+            context.moveTo(-this.size * 0.5, this.size * 0.6);
+            context.quadraticCurveTo(0, 0, this.size * 0.5, this.size * 0.6);
+            context.closePath();
+            context.fill();
+            context.restore();
+        }
+    }
+
+    // --- Animation Script ---
+    const script = [
+        { t: 500,  cn: "我们来看一道关于排队的问题。", action: 'intro' },
+        { t: 3500, cn: "首先，同学们排成一个正方形队伍。", action: 'show_square_prompt' },
+        { t: 6000, cn: "题目说，每排有 6 个人。", action: 'show_row' },
+        { t: 8500, cn: "因为是正方形队伍，所以它有 6 排。", action: 'show_full_square' },
+        { t: 12000, cn: "方阵里一共有多少人呢？就是 6 乘以 6。", action: 'calc_square' },
+        { t: 15500, cn: "6 乘以 6 等于 36 人。", action: 'show_square_result' },
+        { t: 18000, cn: "接着，每个方阵前面还有 2 名领队的同学。", action: 'show_leaders' },
+        { t: 21500, cn: "所以，我们需要把方阵的 36 人和领队的 2 人加起来。", action: 'calc_total' },
+        { t: 25500, cn: "36 加 2 等于 38 人。", action: 'show_total_result' },
+        { t: 28500, cn: "所以，参加比赛的一共有 38 人。", action: 'conclusion' }
+    ];
+    const totalDuration = script[script.length - 1].t + 3000;
+
+    // --- Action Handler ---
+    function executeAction(action) {
+        // Hide math card by default
+        mathCard.classList.remove('visible');
+
+        switch (action) {
+            case 'intro':
+                header.style.opacity = '1';
+                break;
+            case 'show_square_prompt':
+                header.style.opacity = '0';
+                break;
+            case 'show_row': {
+                students = [];
+                const spacing = 40;
+                const startX = canvasWidth / 2 - (6 - 1) * spacing / 2;
+                const startY = canvasHeight / 2 - (6 - 1) * spacing / 2;
+                for (let i = 0; i < 6; i++) {
+                    students.push(new Person(startX + i * spacing, startY, studentSize, studentColor));
+                }
+                break;
+            }
+            case 'show_full_square': {
+                students = [];
+                const spacing = 40;
+                const startX = canvasWidth / 2 - (6 - 1) * spacing / 2;
+                const startY = canvasHeight / 2 - (6 - 1) * spacing / 2;
+                for (let r = 0; r < 6; r++) {
+                    for (let c = 0; c < 6; c++) {
+                        students.push(new Person(startX + c * spacing, startY + r * spacing, studentSize, studentColor));
+                    }
+                }
+                break;
+            }
+            case 'calc_square':
+                mathContent.innerHTML = '6 &times; 6 = ?';
+                mathLabel.textContent = '方阵人数 = 每排人数 × 排数';
+                mathCard.classList.add('visible');
+                break;
+            case 'show_square_result':
+                mathContent.innerHTML = '6 &times; 6 = 36';
+                mathLabel.textContent = '方阵里有 36 人';
+                mathCard.classList.add('visible');
+                break;
+            case 'show_leaders': {
+                leaders = [];
+                const firstRowY = students[0].targetY;
+                const firstRowCenterX = canvasWidth / 2;
+                leaders.push(new Person(firstRowCenterX - 20, firstRowY - 60, studentSize, leaderColor));
+                leaders.push(new Person(firstRowCenterX + 20, firstRowY - 60, studentSize, leaderColor));
+                break;
+            }
+            case 'calc_total':
+                mathContent.innerHTML = '36 + 2 = ?';
+                mathLabel.textContent = '总人数 = 方阵人数 + 领队人数';
+                mathCard.classList.add('visible');
+                break;
+            case 'show_total_result':
+                mathContent.innerHTML = '36 + 2 = 38';
+                mathLabel.textContent = '总人数是 38 人';
+                mathCard.classList.add('visible');
+                break;
+            case 'conclusion':
+                 // Keep the final result card visible
+                 mathCard.classList.add('visible');
+                break;
+        }
+    }
+
+    // --- Speech Synthesis ---
+    function speakText(text) {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+        const synth = window.speechSynthesis;
+        synth.cancel();
+        if (!text || !text.trim()) return;
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'zh-CN';
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+        synth.speak(utter);
+    }
+
+    // --- Main Loop ---
+    let startTime = null;
+    let currentStepIndex = -1;
+
+    function loop(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+
+        // --- Update Script ---
+        const nextStepIndex = script.findIndex(step => step.t > elapsed);
+        const newStepIndex = (nextStepIndex === -1 ? script.length : nextStepIndex) - 1;
+
+        if (newStepIndex > currentStepIndex) {
+            currentStepIndex = newStepIndex;
+            const step = script[currentStepIndex];
+            subCN.textContent = step.cn;
+            subtitleBox.classList.add('visible');
+            speakText(step.cn);
+            executeAction(step.action);
+        }
+
+        // --- Update Progress Bar ---
+        const progress = Math.min(elapsed / totalDuration, 1);
+        progressBar.style.width = `${progress * 100}%`;
+
+        // --- Clear and Draw ---
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        
+        // Update and draw entities
+        [...students, ...leaders].forEach(p => p.update());
+        [...students, ...leaders].forEach(p => p.draw(ctx));
+
+        ctx.restore();
+
+        // --- Continue Loop ---
+        if (elapsed < totalDuration) {
+            requestAnimationFrame(loop);
+        } else {
+             // Keep the last subtitle visible
+            subtitleBox.classList.add('visible');
+        }
+    }
+    
+    // --- Start Animation ---
+    requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
